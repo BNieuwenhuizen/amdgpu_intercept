@@ -1,0 +1,80 @@
+Introduction
+  This software consists of a library to record the commands userspace drivers send
+  to AMD GCN GPU's.
+
+Requirements
+ - a C++ 2011 capable compiler
+ - CMake
+ - a Tonga based GPU
+ - a libdrm_amdgpu based driver to be traced
+ - clrxdisasm on the path for automatically disassembling shaders
+     see https://github.com/CLRX/CLRX-mirror
+
+Building
+  It uses a standard CMake based build process. I haven't look at installation
+  yet, so that may or may not work.
+
+Usage
+ set these two environment variables:
+   LD_PRELOAD=/path/to/libamdgpu_intercept.so
+   INTERCEPT_DIR=/path/to/existing/directory
+
+   The IB's and shaders get dump in the latter directory.
+
+How to modify for another card
+ The clrxdisasm commandline needs to be changed in code to disassemble for the
+ correct GPU architecture.
+
+ Note that this software has not been tested on anything but a Tonga card, and
+ will not work with any card/driver combination that does not use libdrm_amdgpu.
+
+Limitations
+ Currently it only traces command buffers submitted to the graphics ring. There
+ are some assumptions that have been true in practice for all my tests, but are
+ wrong in general.
+
+License
+  This software is licensed under the MIT license.
+
+   Copyright 2016 Bas Nieuwenhuizen
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included
+   in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+  It also contains parts of Mesa that are licensed under the MIT license:
+
+   Copyright (C) 2011  Advanced Micro Devices, Inc.
+   Copyright 2015 Advanced Micro Devices, Inc.
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included
+   in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   THE COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
