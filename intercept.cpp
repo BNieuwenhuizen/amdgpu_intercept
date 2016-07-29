@@ -269,6 +269,8 @@ void process_packet0(std::ostream &os, uint32_t const *packet) {
 
 static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
 
+static size_t cs_id = 0;
+
 void process_packet3(std::ostream &os, uint32_t *packet) {
   auto op = PKT3_IT_OPCODE_G(*packet);
   int i;
@@ -465,19 +467,27 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
     break;
   case PKT3_INDIRECT_BUFFER_CIK:
   case PKT3_INDIRECT_BUFFER_CONST: {
+    print_named_value(os, "IB_BASE_LO", packet[1], 32);
+    print_named_value(os, "IB_BASE_HI", packet[2], 32);
+    print_named_value(os, "IB_SIZE", packet[3] & 0xFFFFF, 20);
+    print_named_value(os, "CHAIN", (packet[3] >> 20) & 1, 1);
+    print_named_value(os, "VALID", (packet[3] >> 23) & 1, 1);
     std::uint64_t va = static_cast<std::uint64_t>(packet[2]) << 32;
     va |= packet[1];
     unsigned words = packet[3] & 0xfffff;
     uint32_t *data = (uint32_t *)get_ptr(va, words * 4);
     process_ib(os, data, data + words);
   } break;
+  case PKT3_NOP:
+    os << "     trace id: 0x" << std::setw(8) << std::setfill('0') << std::hex
+         << packet[1] << std::dec << "\n";
   }
 }
 
 static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
   while (curr != e) {
     if (curr > e) {
-      std::cerr << "went past end of IB: " << std::hex << curr << " " << e
+      std::cerr << "went past end of IB at CS " << cs_id << ": " << std::hex << curr << " " << e
                 << std::endl;
       abort();
     }
@@ -508,8 +518,6 @@ static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
 int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
                      struct amdgpu_cs_request *ibs_request,
                      uint32_t number_of_requests) {
-
-  static size_t cs_id = 0;
 
   for (unsigned i = 0; i < number_of_requests; ++i) {
     for (unsigned j = 0; j < ibs_request[i].number_of_ibs; ++j) {
