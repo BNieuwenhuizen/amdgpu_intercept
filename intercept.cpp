@@ -273,7 +273,7 @@ void process_packet0(std::ostream &os, uint32_t const *packet) {
 }
 
 static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
-
+static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
 static size_t cs_id = 0;
 
 void process_packet3(std::ostream &os, uint32_t *packet) {
@@ -520,6 +520,59 @@ static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
   }
 }
 
+static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
+  while (curr != e) {
+    if (curr > e) {
+      std::cerr << "went past end of IB at CS " << cs_id << ": " << std::hex << curr << " " << e
+                << std::endl;
+      abort();
+    }
+    uint32_t op = (*curr) & 0xff;
+    uint32_t pkt_count;
+    switch (op) {
+    case CIK_SDMA_OPCODE_NOP:
+      ++curr;
+      os << "DMA NOP" << "\n";
+      break;
+    case CIK_SDMA_OPCODE_COPY: {
+      uint32_t sub_op = ((*curr) >> 8) & 0xff;
+      switch (sub_op) {
+      case CIK_SDMA_COPY_SUB_OPCODE_LINEAR:
+	pkt_count = 7;
+	os << "DMA COPY LINEAR" << "\n";
+	break;
+      case CIK_SDMA_COPY_SUB_OPCODE_TILED:
+	pkt_count = 12;
+	os << "DMA COPY TILED" << "\n";
+	break;
+      case CIK_SDMA_COPY_SUB_OPCODE_LINEAR_SUB_WINDOW:
+	pkt_count = 13;
+	os << "DMA COPY LINEAR SUB WINDOW" << "\n";
+	break;
+      case CIK_SDMA_COPY_SUB_OPCODE_TILED_SUB_WINDOW:
+	pkt_count = 14;
+	os << "DMA COPY TILED SUB WINDOW" << "\n";
+	break;
+      case CIK_SDMA_COPY_SUB_OPCODE_T2T_SUB_WINDOW:
+	pkt_count = 15;
+	os << "DMA COPY T2T SUB WINDOW" << "\n";
+	break;
+      default:
+	os << "DMA COPY UNKNOWN" << "\n";
+	break;
+      }
+      curr += pkt_count;
+      break;
+    }
+    case CIK_SDMA_OPCODE_WRITE:
+      break;
+    case CIK_SDMA_OPCODE_INDIRECT_BUFFER:
+    case CIK_SDMA_PACKET_CONSTANT_FILL:
+      break;
+    }
+  }
+}
+
 int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
                      struct amdgpu_cs_request *ibs_request,
                      uint32_t number_of_requests) {
@@ -531,22 +584,25 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
       std::ofstream out0(output_dir + "cs." + std::to_string(cs_id) +
                          ".type.txt");
       out0 << ibs_request[i].ip_type << "\n";
-      if (ibs_request[i].ip_type != AMDGPU_HW_IP_GFX)
-        continue;
       uint32_t *data = (uint32_t *)get_ptr(addr, size * 4);
       if (data) {
         std::string cs_type = "unknown";
-        if (ibs_request[i].ibs[j].flags == 0)
+        if (ibs_request[i].ip_type == AMDGPU_HW_IP_DMA)
+	  cs_type = "dma";
+        else if (ibs_request[i].ibs[j].flags == 0)
           cs_type = "de";
-        if (ibs_request[i].ibs[j].flags == 1)
+        else if (ibs_request[i].ibs[j].flags == 1)
           cs_type = "ce";
-        if (ibs_request[i].ibs[j].flags == 3)
+        else if (ibs_request[i].ibs[j].flags == 3)
           cs_type = "ce_preamble";
 
         std::ofstream out(output_dir + "cs." + std::to_string(cs_id) + "." +
                           cs_type + ".txt");
         out << std::hex << addr << std::dec << "\n";
-        process_ib(out, data, data + size);
+	if (ibs_request[i].ip_type == AMDGPU_HW_IP_DMA)
+	  process_dma_ib(out, data, data + size);
+	else
+	  process_ib(out, data, data + size);
       }
     }
     ++cs_id;
