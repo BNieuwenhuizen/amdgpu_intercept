@@ -150,6 +150,7 @@
 #define PKT3_EVENT_WRITE                       0x46
 #define PKT3_EVENT_WRITE_EOP                   0x47
 #define PKT3_EVENT_WRITE_EOS                   0x48
+#define PKT3_RELEASE_MEM                       0x49
 #define PKT3_ONE_REG_WRITE                     0x57 /* not on CIK */
 #define PKT3_ACQUIRE_MEM                       0x58 /* new for CIK */
 #define PKT3_SET_CONFIG_REG                    0x68

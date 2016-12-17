@@ -353,6 +353,26 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
       print_named_value(os, "ADDRESS_HI", packet[3], 16);
     }
     break;
+  case PKT3_EVENT_WRITE_EOP:
+    si_dump_reg(os, R_028A90_VGT_EVENT_INITIATOR, packet[1],
+                S_028A90_EVENT_TYPE(~0));
+    print_named_value(os, "EVENT_INDEX", (packet[1] >> 8) & 0xf, 3);
+    print_named_value(os, "DATA_SEL", (packet[3] >> 29) & 0x7, 3);
+    print_named_value(os, "ADDR_LO", packet[2], 32);
+    print_named_value(os, "ADDR_HI", packet[3] & 0xffff, 32);
+    print_named_value(os, "SEQ_LO", packet[4], 32);
+    print_named_value(os, "SEQ_HI", packet[5], 32);
+    break;
+  case PKT3_RELEASE_MEM:
+    si_dump_reg(os, R_028A90_VGT_EVENT_INITIATOR, packet[1],
+                S_028A90_EVENT_TYPE(~0));
+    print_named_value(os, "EVENT_INDEX", (packet[1] >> 8) & 0xf, 4);
+    print_named_value(os, "DATA_SEL", (packet[2] >> 29) & 0x7, 3);
+    print_named_value(os, "ADDR_LO", packet[3], 32);
+    print_named_value(os, "ADDR_HI", packet[4], 32);
+    print_named_value(os, "SEQ_LO", packet[5], 32);
+    print_named_value(os, "SEQ_HI", packet[6], 32);
+    break;
   case PKT3_DRAW_INDEX_AUTO:
     si_dump_reg(os, R_030930_VGT_NUM_INDICES, packet[1], ~0);
     si_dump_reg(os, R_0287F0_VGT_DRAW_INITIATOR, packet[2], ~0);
