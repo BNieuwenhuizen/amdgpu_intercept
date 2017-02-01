@@ -547,7 +547,8 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
                 << std::endl;
       abort();
     }
-    uint32_t op = (*curr) & 0xff;
+    uint32_t val = curr[0];
+    uint32_t op = val & 0xff;
     uint32_t pkt_count;
     switch (op) {
     case CIK_SDMA_OPCODE_NOP:
@@ -555,11 +556,17 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       os << "DMA NOP" << "\n";
       break;
     case CIK_SDMA_OPCODE_COPY: {
-      uint32_t sub_op = ((*curr) >> 8) & 0xff;
+      uint32_t sub_op = (val >> 8) & 0xff;
       switch (sub_op) {
       case CIK_SDMA_COPY_SUB_OPCODE_LINEAR:
 	pkt_count = 7;
 	os << "DMA COPY LINEAR" << "\n";
+	print_named_value(os, "SIZE", curr[1], 32);
+	print_named_value(os, "OFFSET", curr[2], 32);
+	print_named_value(os, "SRC_ADDR_LO", curr[3], 32);
+	print_named_value(os, "SRC_ADDR_HI", curr[4], 32);
+	print_named_value(os, "DST_ADDR_LO", curr[5], 32);
+	print_named_value(os, "DST_ADDR_HI", curr[6], 32);
 	break;
       case CIK_SDMA_COPY_SUB_OPCODE_TILED:
 	pkt_count = 12;
@@ -567,15 +574,54 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
 	break;
       case CIK_SDMA_COPY_SUB_OPCODE_LINEAR_SUB_WINDOW:
 	pkt_count = 13;
-	os << "DMA COPY LINEAR SUB WINDOW" << "\n";
+	os << "DMA COPY LINEAR SUB WINDOW" << curr[0] << "\n";
+	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
+	print_named_value(os, "SRC_ADDR_HI", curr[2], 32);
+	print_named_value(os, "SRC_XY", curr[3], 32);
+	print_named_value(os, "SRC_PITCH", curr[4], 32);
+	print_named_value(os, "SRC_SLICE_PITCH", curr[5], 32);
+	print_named_value(os, "DST_ADDR_LO", curr[6], 32);
+	print_named_value(os, "DST_ADDR_HI", curr[7], 32);
+	print_named_value(os, "DST_XY", curr[8], 32);
+	print_named_value(os, "DST_Z_PITCH", curr[9], 32);
+	print_named_value(os, "DST_SLICE_PITCH", curr[10], 32);
+	print_named_value(os, "W_H", curr[11], 32);
+	print_named_value(os, "DEPTH", curr[12], 32);
 	break;
       case CIK_SDMA_COPY_SUB_OPCODE_TILED_SUB_WINDOW:
 	pkt_count = 14;
-	os << "DMA COPY TILED SUB WINDOW" << "\n";
+	os << "DMA COPY TILED SUB WINDOW" << curr[0] << "\n";
+	print_named_value(os, "X_ADDR_LO", curr[1], 32);
+	print_named_value(os, "X_ADDR_HI", curr[2], 32);
+	print_named_value(os, "X_XY", curr[3], 32);
+	print_named_value(os, "X_PITCH", curr[4], 32);
+	print_named_value(os, "X_SRC_SLICE_PITCH", curr[5], 32);
+	print_named_value(os, "TILE_INFO", curr[6], 32);
+	print_named_value(os, "Y_ADDR_LO", curr[7], 32);
+	print_named_value(os, "Y_ADDR_HI", curr[8], 32);
+	print_named_value(os, "Y_XY", curr[9], 32);
+	print_named_value(os, "Y_Z_PITCH", curr[10], 32);
+	print_named_value(os, "Y_SLICE_PITCH", curr[11], 32);
+	print_named_value(os, "W_H", curr[12], 32);
+	print_named_value(os, "DEPTH", curr[13], 32);
 	break;
       case CIK_SDMA_COPY_SUB_OPCODE_T2T_SUB_WINDOW:
 	pkt_count = 15;
-	os << "DMA COPY T2T SUB WINDOW" << "\n";
+	os << "DMA COPY T2T SUB WINDOW" << curr[0] << "\n";
+	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
+	print_named_value(os, "SRC_ADDR_HI", curr[2], 32);
+	print_named_value(os, "SRC_XY", curr[3], 32);
+	print_named_value(os, "SRC_PITCH", curr[4], 32);
+	print_named_value(os, "SRC_SLICE_PITCH", curr[5], 32);
+	print_named_value(os, "SRC_TILE_INFO", curr[6], 32);
+	print_named_value(os, "DST_ADDR_LO", curr[7], 32);
+	print_named_value(os, "DST_ADDR_HI", curr[8], 32);
+	print_named_value(os, "DST_XY", curr[9], 32);
+	print_named_value(os, "DST_Z_PITCH", curr[10], 32);
+	print_named_value(os, "DST_SLICE_PITCH", curr[11], 32);
+	print_named_value(os, "DST_TILE_INFO", curr[12], 32);
+	print_named_value(os, "W_H", curr[13], 32);
+	print_named_value(os, "DEPTH", curr[14], 32);
 	break;
       default:
 	os << "DMA COPY UNKNOWN" << "\n";
@@ -584,10 +630,30 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       curr += pkt_count;
       break;
     }
-    case CIK_SDMA_OPCODE_WRITE:
+    case CIK_SDMA_OPCODE_WRITE: {
+      uint32_t sub_op = (val >> 8) & 0xff;
+      switch (sub_op) {
+      case SDMA_WRITE_SUB_OPCODE_LINEAR:
+	os << "DMA WRITE LINEAR" << "\n";
+	break;
+      case SDMA_WRITE_SUB_OPCODE_TILED:
+	os << "DMA WRITE TILED" << "\n";
+	break;
+      default:
+	os << "DMA WRITE UNKNOWN" << "\n";
+      }
+
       break;
+    }
     case CIK_SDMA_OPCODE_INDIRECT_BUFFER:
+      break;
     case CIK_SDMA_PACKET_CONSTANT_FILL:
+      os << "DMA CONSTANT FILL" << "\n";
+      print_named_value(os, "ADDR_LO", curr[1], 32);
+      print_named_value(os, "ADDR_HI", curr[2], 32);
+      print_named_value(os, "DATA", curr[3], 32);
+      print_named_value(os, "FILLSIZE", curr[4], 32);
+      curr += 5;
       break;
     }
   }
