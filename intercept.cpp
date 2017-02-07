@@ -574,7 +574,7 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
 	break;
       case CIK_SDMA_COPY_SUB_OPCODE_LINEAR_SUB_WINDOW:
 	pkt_count = 13;
-	os << "DMA COPY LINEAR SUB WINDOW" << curr[0] << "\n";
+	os << "DMA COPY LINEAR SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
 	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
 	print_named_value(os, "SRC_ADDR_HI", curr[2], 32);
 	print_named_value(os, "SRC_XY", curr[3], 32);
@@ -590,7 +590,7 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
 	break;
       case CIK_SDMA_COPY_SUB_OPCODE_TILED_SUB_WINDOW:
 	pkt_count = 14;
-	os << "DMA COPY TILED SUB WINDOW" << curr[0] << "\n";
+	os << "DMA COPY TILED SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
 	print_named_value(os, "X_ADDR_LO", curr[1], 32);
 	print_named_value(os, "X_ADDR_HI", curr[2], 32);
 	print_named_value(os, "X_XY", curr[3], 32);
@@ -607,7 +607,7 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
 	break;
       case CIK_SDMA_COPY_SUB_OPCODE_T2T_SUB_WINDOW:
 	pkt_count = 15;
-	os << "DMA COPY T2T SUB WINDOW" << curr[0] << "\n";
+	os << "DMA COPY T2T SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
 	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
 	print_named_value(os, "SRC_ADDR_HI", curr[2], 32);
 	print_named_value(os, "SRC_XY", curr[3], 32);
@@ -635,14 +635,24 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       switch (sub_op) {
       case SDMA_WRITE_SUB_OPCODE_LINEAR:
 	os << "DMA WRITE LINEAR" << "\n";
+	print_named_value(os, "DST_ADDR_LO", curr[1], 32);
+	print_named_value(os, "DST_ADDR_HI", curr[2], 32);
+	print_named_value(os, "NUM_DWORDS", curr[3], 32);
+	pkt_count = curr[3] + 4;
+	for (unsigned i = 0; i < curr[3]; i++) {
+	  print_spaces(os, INDENT_PKT);
+	  os << "0x" << std::setw(8) << std::setfill('0') << std::hex
+	     << curr[4 + i] << std::dec << "\n";
+	}
 	break;
       case SDMA_WRITE_SUB_OPCODE_TILED:
 	os << "DMA WRITE TILED" << "\n";
 	break;
       default:
 	os << "DMA WRITE UNKNOWN" << "\n";
+	break;
       }
-
+      curr += pkt_count;
       break;
     }
     case CIK_SDMA_OPCODE_INDIRECT_BUFFER:
