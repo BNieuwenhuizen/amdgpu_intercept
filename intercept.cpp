@@ -250,11 +250,6 @@ void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value) {
     print_spaces(os, 8);
     os << s << "\n";
   }
-  if (reg == R_00B420_SPI_SHADER_PGM_LO_HS && value) {
-    auto s = dump_shader(ls_shaders, "Hs", static_cast<uint64_t>(value) << 8);
-    print_spaces(os, 8);
-    os << s << "\n";
-  }
   if (reg == R_00B830_COMPUTE_PGM_LO && value) {
     auto s = dump_shader(ls_shaders, "cs", static_cast<uint64_t>(value) << 8);
     print_spaces(os, 8);
