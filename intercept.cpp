@@ -182,7 +182,7 @@ static void print_named_value(std::ostream &os, const char *name,
 }
 
 static std::map<std::vector<std::uint32_t>, std::string> ls_shaders, hs_shaders,
-    vs_shaders, ps_shaders, gs_shaders, es_shaders;
+    vs_shaders, ps_shaders, gs_shaders, es_shaders, cs_shaders;
 
 std::string
 dump_shader(std::map<std::vector<std::uint32_t>, std::string> &cache,
@@ -246,12 +246,12 @@ void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value) {
     os << s << "\n";
   }
   if (reg == R_00B520_SPI_SHADER_PGM_LO_LS && value) {
-    auto s = dump_shader(hs_shaders, "ls", static_cast<uint64_t>(value) << 8);
+    auto s = dump_shader(ls_shaders, "ls", static_cast<uint64_t>(value) << 8);
     print_spaces(os, 8);
     os << s << "\n";
   }
   if (reg == R_00B830_COMPUTE_PGM_LO && value) {
-    auto s = dump_shader(ls_shaders, "cs", static_cast<uint64_t>(value) << 8);
+    auto s = dump_shader(cs_shaders, "cs", static_cast<uint64_t>(value) << 8);
     print_spaces(os, 8);
     os << s << "\n";
   }
