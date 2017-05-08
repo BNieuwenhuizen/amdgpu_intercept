@@ -810,6 +810,33 @@ int amdgpu_bo_va_op(amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
   return ret;
 }
 
+extern "C" int amdgpu_bo_va_op_refcounted(amdgpu_device_handle dev,
+amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
+                    uint64_t addr, uint64_t flags, uint32_t ops) {
+  int ret = ((int (*)(amdgpu_device_handle, amdgpu_bo_handle, uint64_t, uint64_t, uint64_t, uint64_t,
+                      uint32_t))_dl_sym(RTLD_NEXT, "amdgpu_bo_va_op_refcounted",
+                                        (void *)amdgpu_bo_va_op))(
+      dev, bo, offset, size, addr, flags, ops);
+  if (ret)
+    return ret;
+
+  std::lock_guard<std::mutex> lock(global_mutex);
+  if (ops == AMDGPU_VA_OP_MAP) {
+    Map_info info;
+    info.bo = bo;
+    info.addr = addr;
+    info.size = size;
+    info.offset = offset;
+    maps[addr] = info;
+  } else if (ops == AMDGPU_VA_OP_UNMAP) {
+    auto it = maps.find(addr);
+    if (it != maps.end()) {
+      maps.erase(it);
+    }
+  }
+  return ret;
+}
+
 extern "C" void *dlsym(void *handle, const char *name) {
   if (!strcmp(name, "dlsym"))
     return (void *)dlsym;
@@ -825,6 +852,8 @@ extern "C" void *dlsym(void *handle, const char *name) {
     return (void *)amdgpu_bo_cpu_unmap;
   if (!strcmp(name, "amdgpu_bo_va_op"))
     return (void *)amdgpu_bo_va_op;
+  if (!strcmp(name, "amdgpu_bo_va_op_refcounted"))
+    return (void *)amdgpu_bo_va_op_refcounted;
   return get_real_dlsym()(handle, name);
 }
 
