@@ -415,6 +415,17 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
     si_dump_reg(os, R_504_DST_ADDR_HI, packet[5], ~0);
     si_dump_reg(os, R_414_COMMAND, packet[6], ~0);
     break;
+  case PKT3_COPY_DATA:
+    print_named_value(os, "SRC_SEL", (packet[1] >> 0) & 0xf, 4);
+    print_named_value(os, "DST_SEL", (packet[1] >> 8) & 0xf, 4);
+    print_named_value(os, "COUNT_SEL", (packet[1] >> 16) & 1, 1);
+    print_named_value(os, "WR_CONFIRM", (packet[1] >> 20) & 1, 1);
+    print_named_value(os, "ENGINE_SEL", (packet[1] >> 30) & 3, 2);
+    print_named_value(os, "SRC_ADDR_LO", packet[2], 32);
+    print_named_value(os, "SRC_ADDR_HI", packet[3], 32);
+    print_named_value(os, "DST_ADDR_LO", packet[4], 32);
+    print_named_value(os, "DST_ADDR_HI", packet[5], 32);
+    break;
   case PKT3_INCREMENT_CE_COUNTER:
     print_named_value(os, "CE_COUNTER_DUMMY", packet[1], 32);
     for (unsigned i = 1; i <= PKT_COUNT_G(packet[0]); i++) {
