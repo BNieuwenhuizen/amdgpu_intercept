@@ -74,6 +74,7 @@ static const struct si_packet3 packet3_table[] = {
 	{"NUM_INSTANCES", PKT3_NUM_INSTANCES},
 	{"DRAW_INDEX_MULTI_AUTO", PKT3_DRAW_INDEX_MULTI_AUTO},
 	{"INDIRECT_BUFFER_SI", PKT3_INDIRECT_BUFFER_SI},
+	{"INDIRECT_BUFFER_CONST", PKT3_INDIRECT_BUFFER_CONST},
 	{"STRMOUT_BUFFER_UPDATE", PKT3_STRMOUT_BUFFER_UPDATE},
 	{"DRAW_INDEX_OFFSET_2", PKT3_DRAW_INDEX_OFFSET_2},
 	{"DRAW_PREAMBLE", PKT3_DRAW_PREAMBLE},
@@ -93,6 +94,7 @@ static const struct si_packet3 packet3_table[] = {
 	{"EVENT_WRITE_EOP", PKT3_EVENT_WRITE_EOP},
 	{"EVENT_WRITE_EOS", PKT3_EVENT_WRITE_EOS},
 	{"RELEASE_MEM", PKT3_RELEASE_MEM},
+	{"SET_CONTEXT_REG_MASK", PKT3_SET_CONTEXT_REG_MASK},
 	{"ONE_REG_WRITE", PKT3_ONE_REG_WRITE},
 	{"ACQUIRE_MEM", PKT3_ACQUIRE_MEM},
 	{"SET_CONFIG_REG", PKT3_SET_CONFIG_REG},
@@ -132,6 +134,12 @@ static const struct si_field r_370_control__fields[] = {
 	{"WR_CONFIRM", S_370_WR_CONFIRM(~0u)},
 	{"WR_ONE_ADDR", S_370_WR_ONE_ADDR(~0u)},
 	{"DST_SEL", S_370_DST_SEL(~0u), ARRAY_SIZE(r_370_control__dst_sel__values), r_370_control__dst_sel__values},
+};
+
+static const struct si_field r_3f2_control__fields[] = {
+	{"IB_SIZE", S_3F2_IB_SIZE(~0u)},
+	{"CHAIN", S_3F2_CHAIN(~0u)},
+	{"VALID", S_3F2_VALID(~0u)},
 };
 
 static const struct si_field r_410_cp_dma_word0__fields[] = {
@@ -4007,6 +4015,14 @@ static const struct si_field r_02882c_pa_su_prim_filter_cntl__fields[] = {
 	{"YMAX_BOTTOM_EXCLUSION", S_02882C_YMAX_BOTTOM_EXCLUSION(~0u)},
 };
 
+static const struct si_field r_028830_pa_su_small_prim_filter_cntl__fields[] = {
+	{"SMALL_PRIM_FILTER_ENABLE", S_028830_SMALL_PRIM_FILTER_ENABLE(~0u)},
+	{"TRIANGLE_FILTER_DISABLE", S_028830_TRIANGLE_FILTER_DISABLE(~0u)},
+	{"LINE_FILTER_DISABLE", S_028830_LINE_FILTER_DISABLE(~0u)},
+	{"POINT_FILTER_DISABLE", S_028830_POINT_FILTER_DISABLE(~0u)},
+	{"RECTANGLE_FILTER_DISABLE", S_028830_RECTANGLE_FILTER_DISABLE(~0u)},
+};
+
 static const struct si_field r_028a00_pa_su_point_size__fields[] = {
 	{"HEIGHT", S_028A00_HEIGHT(~0u)},
 	{"WIDTH", S_028A00_WIDTH(~0u)},
@@ -4558,6 +4574,7 @@ static const struct si_field r_028b50_vgt_tess_distribution__fields[] = {
 	{"ACCUM_TRI", S_028B50_ACCUM_TRI(~0u)},
 	{"ACCUM_QUAD", S_028B50_ACCUM_QUAD(~0u)},
 	{"DONUT_SPLIT", S_028B50_DONUT_SPLIT(~0u)},
+	{"TRAP_SPLIT", S_028B50_TRAP_SPLIT(~0u)},
 };
 
 static si_enum r_028b54_vgt_shader_stages_en__ls_en__values[] = {
@@ -4639,6 +4656,13 @@ static si_enum r_028b6c_vgt_tf_param__rdreq_policy__values[] = {
 	{V_028B6C_VGT_POLICY_BYPASS, "VGT_POLICY_BYPASS"},
 };
 
+static si_enum r_028b6c_vgt_tf_param__distribution_mode__values[] = {
+	{V_028B6C_DISTRIBUTION_MODE_NO_DIST, "DISTRIBUTION_MODE_NO_DIST"},
+	{V_028B6C_DISTRIBUTION_MODE_PATCHES, "DISTRIBUTION_MODE_PATCHES"},
+	{V_028B6C_DISTRIBUTION_MODE_DONUTS, "DISTRIBUTION_MODE_DONUTS"},
+	{V_028B6C_DISTRIBUTION_MODE_TRAPEZOIDS, "DISTRIBUTION_MODE_TRAPEZOIDS"},
+};
+
 static const struct si_field r_028b6c_vgt_tf_param__fields[] = {
 	{"TYPE", S_028B6C_TYPE(~0u), ARRAY_SIZE(r_028b6c_vgt_tf_param__type__values), r_028b6c_vgt_tf_param__type__values},
 	{"PARTITIONING", S_028B6C_PARTITIONING(~0u), ARRAY_SIZE(r_028b6c_vgt_tf_param__partitioning__values), r_028b6c_vgt_tf_param__partitioning__values},
@@ -4649,7 +4673,7 @@ static const struct si_field r_028b6c_vgt_tf_param__fields[] = {
 	{"DISABLE_DONUTS", S_028B6C_DISABLE_DONUTS(~0u)},
 	{"RDREQ_POLICY", S_028B6C_RDREQ_POLICY(~0u), ARRAY_SIZE(r_028b6c_vgt_tf_param__rdreq_policy__values), r_028b6c_vgt_tf_param__rdreq_policy__values},
 	{"RDREQ_POLICY_VI", S_028B6C_RDREQ_POLICY_VI(~0u)},
-	{"DISTRIBUTION_MODE", S_028B6C_DISTRIBUTION_MODE(~0u)},
+	{"DISTRIBUTION_MODE", S_028B6C_DISTRIBUTION_MODE(~0u), ARRAY_SIZE(r_028b6c_vgt_tf_param__distribution_mode__values), r_028b6c_vgt_tf_param__distribution_mode__values},
 	{"MTYPE", S_028B6C_MTYPE(~0u)},
 };
 
@@ -5085,6 +5109,9 @@ static const struct si_reg reg_table[] = {
 	{"CONTROL", R_370_CONTROL, ARRAY_SIZE(r_370_control__fields), r_370_control__fields},
 	{"DST_ADDR_LO", R_371_DST_ADDR_LO},
 	{"DST_ADDR_HI", R_372_DST_ADDR_HI},
+	{"IB_BASE_LO", R_3F0_IB_BASE_LO},
+	{"IB_BASE_HI", R_3F1_IB_BASE_HI},
+	{"CONTROL", R_3F2_CONTROL, ARRAY_SIZE(r_3f2_control__fields), r_3f2_control__fields},
 	{"CP_DMA_WORD0", R_410_CP_DMA_WORD0, ARRAY_SIZE(r_410_cp_dma_word0__fields), r_410_cp_dma_word0__fields},
 	{"CP_DMA_WORD1", R_411_CP_DMA_WORD1, ARRAY_SIZE(r_411_cp_dma_word1__fields), r_411_cp_dma_word1__fields},
 	{"CP_DMA_WORD2", R_412_CP_DMA_WORD2, ARRAY_SIZE(r_412_cp_dma_word2__fields), r_412_cp_dma_word2__fields},
@@ -6113,6 +6140,7 @@ static const struct si_reg reg_table[] = {
 	{"PA_SU_LINE_STIPPLE_CNTL", R_028824_PA_SU_LINE_STIPPLE_CNTL, ARRAY_SIZE(r_028824_pa_su_line_stipple_cntl__fields), r_028824_pa_su_line_stipple_cntl__fields},
 	{"PA_SU_LINE_STIPPLE_SCALE", R_028828_PA_SU_LINE_STIPPLE_SCALE},
 	{"PA_SU_PRIM_FILTER_CNTL", R_02882C_PA_SU_PRIM_FILTER_CNTL, ARRAY_SIZE(r_02882c_pa_su_prim_filter_cntl__fields), r_02882c_pa_su_prim_filter_cntl__fields},
+	{"PA_SU_SMALL_PRIM_FILTER_CNTL", R_028830_PA_SU_SMALL_PRIM_FILTER_CNTL, ARRAY_SIZE(r_028830_pa_su_small_prim_filter_cntl__fields), r_028830_pa_su_small_prim_filter_cntl__fields},
 	{"PA_SU_POINT_SIZE", R_028A00_PA_SU_POINT_SIZE, ARRAY_SIZE(r_028a00_pa_su_point_size__fields), r_028a00_pa_su_point_size__fields},
 	{"PA_SU_POINT_MINMAX", R_028A04_PA_SU_POINT_MINMAX, ARRAY_SIZE(r_028a04_pa_su_point_minmax__fields), r_028a04_pa_su_point_minmax__fields},
 	{"PA_SU_LINE_CNTL", R_028A08_PA_SU_LINE_CNTL, ARRAY_SIZE(r_028a08_pa_su_line_cntl__fields), r_028a08_pa_su_line_cntl__fields},
