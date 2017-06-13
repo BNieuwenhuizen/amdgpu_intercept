@@ -217,6 +217,11 @@ dump_shader(std::map<std::vector<std::uint32_t>, std::string> &cache,
 }
 
 static std::uint32_t config_reg;
+void process_set_reg_mask(std::ostream &os, std::uint32_t reg, std::uint32_t value, std::uint32_t mask) {
+  reg &= 0xFFFFFFU;
+  si_dump_reg(os, reg, value, mask);
+}
+
 void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value) {
   reg &= 0xFFFFFFU;
   si_dump_reg(os, reg, value, 0xFFFFFFFFU);
@@ -292,6 +297,10 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
                   op, predicate);*/
 
   switch (PKT3_IT_OPCODE_G(*packet)) {
+  case PKT3_SET_CONTEXT_REG_MASK: {
+    unsigned reg = packet[1] * 4 + SI_CONTEXT_REG_OFFSET;
+    process_set_reg_mask(os, reg, packet[3], packet[2]);
+  } break;
   case PKT3_SET_CONTEXT_REG: {
     unsigned reg = packet[1] * 4 + SI_CONTEXT_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
