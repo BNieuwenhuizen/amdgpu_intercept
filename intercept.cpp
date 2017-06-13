@@ -273,6 +273,7 @@ static size_t cs_id = 0;
 
 void process_packet3(std::ostream &os, uint32_t *packet) {
   auto op = PKT3_IT_OPCODE_G(*packet);
+  auto pred = PKT3_PREDICATE(*packet);
   int i;
 
   /* Print the name first. */
@@ -282,9 +283,9 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
   if (i < ARRAY_SIZE(packet3_table)) {
     if (op == PKT3_SET_CONTEXT_REG || op == PKT3_SET_CONFIG_REG ||
         op == PKT3_SET_UCONFIG_REG || op == PKT3_SET_SH_REG)
-      os << COLOR_CYAN << packet3_table[i].name << COLOR_CYAN ":\n";
+      os << COLOR_CYAN << packet3_table[i].name << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
     else
-      os << COLOR_GREEN << packet3_table[i].name << COLOR_CYAN ":\n";
+      os << COLOR_GREEN << packet3_table[i].name << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
   }
   /*else
           fprintf(f, COLOR_RED "PKT3_UNKNOWN 0x%x%s" COLOR_RESET ":\n",
