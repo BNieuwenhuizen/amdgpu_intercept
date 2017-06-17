@@ -307,6 +307,10 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
       process_set_reg(os, reg + 4 * i, packet[2 + i]);
     }
   } break;
+  case PKT3_SET_SH_REG_MASK: {
+    unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
+    process_set_reg_mask(os, reg, packet[3], packet[2]);
+  } break;
   case PKT3_SET_SH_REG: {
     unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
