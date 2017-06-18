@@ -181,6 +181,20 @@ static void print_named_value(std::ostream &os, const char *name,
   print_value(os, value, bits);
 }
 
+static void print_reg_name(std::ostream &os, int offset)
+{
+    int r, f;
+
+  for (r = 0; r < ARRAY_SIZE(reg_table); r++) {
+    const struct si_reg *reg = &reg_table[r];
+
+    if (reg->offset == offset) {
+      print_spaces(os, INDENT_PKT);
+      os << COLOR_YELLOW << reg->name << COLOR_RESET << "\n";
+    }
+  }
+}
+
 static std::map<std::vector<std::uint32_t>, std::string> ls_shaders, hs_shaders,
     vs_shaders, ps_shaders, gs_shaders, es_shaders, cs_shaders;
 
@@ -310,6 +324,13 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
   case PKT3_SET_SH_REG_MASK: {
     unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
     process_set_reg_mask(os, reg, packet[3], packet[2]);
+  } break;
+  case PKT3_LOAD_CONTEXT_REG: {
+    unsigned reg = packet[3] * 4 + SI_CONTEXT_REG_OFFSET;
+    print_named_value(os, "ADDR_LO", packet[1], 32);
+    print_named_value(os, "ADDR_HI", packet[2] & 0xffff, 32);
+    print_reg_name(os, packet[3] * 4 + SI_CONTEXT_REG_OFFSET);
+    print_named_value(os, "DWORDS", packet[4], 32);
   } break;
   case PKT3_SET_SH_REG: {
     unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
