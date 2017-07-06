@@ -301,9 +301,13 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
       break;
   if (i < ARRAY_SIZE(packet3_table)) {
     if (op == PKT3_SET_CONTEXT_REG || op == PKT3_SET_CONFIG_REG ||
-        op == PKT3_SET_UCONFIG_REG || op == PKT3_SET_SH_REG)
-      os << COLOR_CYAN << packet3_table[i].name << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
-    else
+        op == PKT3_SET_UCONFIG_REG || op == PKT3_SET_SH_REG || op == PKT3_SET_SH_REG_INDEX) {
+      auto idx = (packet[1] >> 28) & 0x7;
+      char idx_str[5] = {0};
+      if (idx)
+        snprintf(idx_str, 5, "(%d)", idx);
+      os << COLOR_CYAN << packet3_table[i].name << idx_str << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
+    } else
       os << COLOR_GREEN << packet3_table[i].name << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
   }
   /*else
@@ -321,10 +325,6 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
       process_set_reg(os, reg + 4 * i, packet[2 + i]);
     }
   } break;
-  case PKT3_SET_SH_REG_MASK: {
-    unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
-    process_set_reg_mask(os, reg, packet[3], packet[2]);
-  } break;
   case PKT3_LOAD_CONTEXT_REG: {
     unsigned reg = packet[3] * 4 + SI_CONTEXT_REG_OFFSET;
     print_named_value(os, "ADDR_LO", packet[1], 32);
@@ -333,6 +333,12 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
     print_named_value(os, "DWORDS", packet[4], 32);
   } break;
   case PKT3_SET_SH_REG: {
+    unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
+    for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
+      process_set_reg(os, reg + 4 * i, packet[2 + i]);
+    }
+  } break;
+  case PKT3_SET_SH_REG_INDEX: {
     unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
       process_set_reg(os, reg + 4 * i, packet[2 + i]);
