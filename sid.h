@@ -79,6 +79,7 @@
 #define PKT3_INDEX_BUFFER_SIZE                 0x13
 #define PKT3_DISPATCH_DIRECT                   0x15
 #define PKT3_DISPATCH_INDIRECT                 0x16
+#define PKT3_ATOMIC_MEM                        0x1E
 #define PKT3_OCCLUSION_QUERY                   0x1F /* new for CIK */
 #define PKT3_SET_PREDICATION                   0x20
 #define PKT3_COND_EXEC                         0x22
@@ -166,6 +167,8 @@
 #define PKT3_INCREMENT_CE_COUNTER              0x84
 #define PKT3_INCREMENT_DE_COUNTER              0x85
 #define PKT3_WAIT_ON_CE_COUNTER                0x86
+#define PKT3_WAIT_ON_DE_COUNTER_DIFF           0x88
+#define PKT3_SET_CE_DE_COUNTERS                0x89
 #define PKT3_SET_SH_REG_INDEX                  0x9B
 
 #define PKT_TYPE_S(x)                   (((unsigned)(x) & 0x3) << 30)
