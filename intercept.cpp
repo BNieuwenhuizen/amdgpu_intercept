@@ -730,6 +730,51 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
       context, flags, ibs_request, number_of_requests);
 }
 
+int amdgpu_cs_submit_raw(amdgpu_device_handle device,
+			 amdgpu_context_handle context,
+			 amdgpu_bo_list_handle resources,
+			 int num_chunks,
+			 struct drm_amdgpu_cs_chunk *chunks,
+			 uint64_t *seq_no)
+{
+  for (unsigned i = 0; i < num_chunks; ++i) {
+    struct drm_amdgpu_cs_chunk_data *chunk_data;
+    if (chunks[i].chunk_id != AMDGPU_CHUNK_ID_IB)
+      continue;
+    chunk_data = (struct drm_amdgpu_cs_chunk_data *)(uintptr_t)chunks[i].chunk_data;
+    auto addr = chunk_data->ib_data.va_start;
+    auto size = chunk_data->ib_data.ib_bytes / 4;
+
+    std::ofstream out0(output_dir + "cs." + std::to_string(cs_id) +
+                       ".type.txt");
+    out0 << chunk_data->ib_data.ip_type << "\n";
+    uint32_t *data = (uint32_t *)get_ptr(addr, size * 4);
+    if (data) {
+      std::string cs_type = "unknown";
+      if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
+	cs_type = "dma";
+      else if (chunk_data->ib_data.flags == 0)
+        cs_type = "de";
+      else if (chunk_data->ib_data.flags == 1)
+        cs_type = "ce";
+      else if (chunk_data->ib_data.flags == 3)
+        cs_type = "ce_preamble";
+
+      std::ofstream out(output_dir + "cs." + std::to_string(cs_id) + "." +
+                        cs_type + ".txt");
+      out << std::hex << addr << std::dec << "\n";
+      if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
+        process_dma_ib(out, data, data + size);
+      else
+	process_ib(out, data, data + size);
+    }
+  }
+  return ((int (*)(amdgpu_device_handle, amdgpu_context_handle, amdgpu_bo_list_handle, int, struct drm_amdgpu_cs_chunk *,
+                   uint64_t *))_dl_sym(RTLD_NEXT, "amdgpu_cs_submit_raw",
+                                     (void *)amdgpu_cs_submit_raw))(
+      device, context, resources, num_chunks, chunks, seq_no);
+}
+
 int amdgpu_bo_alloc(amdgpu_device_handle dev,
                     struct amdgpu_bo_alloc_request *alloc_buffer,
                     amdgpu_bo_handle *buf_handle) {
@@ -854,6 +899,8 @@ amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
 extern "C" void *dlsym(void *handle, const char *name) {
   if (!strcmp(name, "dlsym"))
     return (void *)dlsym;
+  if (!strcmp(name, "amdgpu_cs_submit_raw"))
+    return (void *)amdgpu_cs_submit_raw;
   if (!strcmp(name, "amdgpu_cs_submit"))
     return (void *)amdgpu_cs_submit;
   if (!strcmp(name, "amdgpu_bo_alloc"))
