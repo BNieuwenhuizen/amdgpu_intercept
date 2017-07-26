@@ -768,8 +768,8 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
       else
 	process_ib(out, data, data + size);
     }
+    ++cs_id;
   }
-  ++cs_id;
   return ((int (*)(amdgpu_device_handle, amdgpu_context_handle, amdgpu_bo_list_handle, int, struct drm_amdgpu_cs_chunk *,
                    uint64_t *))_dl_sym(RTLD_NEXT, "amdgpu_cs_submit_raw",
                                      (void *)amdgpu_cs_submit_raw))(
