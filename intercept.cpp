@@ -18,6 +18,7 @@ extern "C" {
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #include "sid.h"
+#include "gfx9d.h"
 #include "sid_tables.h"
 
 #define COLOR_RESET "\033[0m"
@@ -126,14 +127,15 @@ static void si_dump_reg(std::ostream &os, unsigned offset, uint32_t value,
                         uint32_t field_mask) {
   int r, f;
 
-  for (r = 0; r < ARRAY_SIZE(reg_table); r++) {
-    const struct si_reg *reg = &reg_table[r];
+  for (r = 0; r < ARRAY_SIZE(sid_reg_table); r++) {
+    const struct si_reg *reg = &sid_reg_table[r];
 
     if (reg->offset == offset) {
       bool first_field = true;
+      const char *reg_name = sid_strings + reg->name_offset;
 
       print_spaces(os, INDENT_PKT);
-      os << COLOR_YELLOW << reg->name << COLOR_RESET << " <- ";
+      os << COLOR_YELLOW << reg_name << "," << std::hex << value << std::dec << " " << COLOR_RESET << " <- ";
 
       if (!reg->num_fields) {
         print_value(os, value, 32);
@@ -141,7 +143,8 @@ static void si_dump_reg(std::ostream &os, unsigned offset, uint32_t value,
       }
 
       for (f = 0; f < reg->num_fields; f++) {
-        const struct si_field *field = &reg->fields[f];
+        const struct si_field *field = sid_fields_table + reg->fields_offset + f;
+        const int *values_offsets = sid_strings_offsets + field->values_offset;
         uint32_t val = (value & field->mask) >> (ffs(field->mask) - 1);
 
         if (!(field->mask & field_mask))
@@ -149,21 +152,13 @@ static void si_dump_reg(std::ostream &os, unsigned offset, uint32_t value,
 
         /* Indent the field. */
         if (!first_field)
-          print_spaces(os, INDENT_PKT + strlen(reg->name) + 4);
+          print_spaces(os, INDENT_PKT + strlen(reg_name) + 4);
 
         /* Print the field. */
-        os << field->name << " = ";
+        os << sid_strings + field->name_offset << " = ";
 
-        struct si_enum *elem = nullptr;
-        for (unsigned i = 0; i < field->num_values; ++i) {
-          if (field->values[i].value == val) {
-            elem = field->values + i;
-            break;
-          }
-        }
-
-        if (elem)
-          os << elem->name << "\n";
+        if (val < field->num_values && values_offsets[val] >= 0)
+          os << sid_strings + values_offsets[val] << "\n";
         else
           print_value(os, val, __builtin_popcountll(field->mask));
 
@@ -185,12 +180,13 @@ static void print_reg_name(std::ostream &os, int offset)
 {
     int r, f;
 
-  for (r = 0; r < ARRAY_SIZE(reg_table); r++) {
-    const struct si_reg *reg = &reg_table[r];
+  for (r = 0; r < ARRAY_SIZE(sid_reg_table); r++) {
+    const struct si_reg *reg = &sid_reg_table[r];
+    const char *reg_name = sid_strings + reg->name_offset;
 
     if (reg->offset == offset) {
       print_spaces(os, INDENT_PKT);
-      os << COLOR_YELLOW << reg->name << COLOR_RESET << "\n";
+      os << COLOR_YELLOW << reg_name << COLOR_RESET << "\n";
     }
   }
 }
@@ -300,15 +296,16 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
     if (packet3_table[i].op == op)
       break;
   if (i < ARRAY_SIZE(packet3_table)) {
+    const char *name = sid_strings + packet3_table[i].name_offset;
     if (op == PKT3_SET_CONTEXT_REG || op == PKT3_SET_CONFIG_REG ||
         op == PKT3_SET_UCONFIG_REG || op == PKT3_SET_SH_REG || op == PKT3_SET_SH_REG_INDEX) {
       auto idx = (packet[1] >> 28) & 0x7;
       char idx_str[5] = {0};
       if (idx)
         snprintf(idx_str, 5, "(%d)", idx);
-      os << COLOR_CYAN << packet3_table[i].name << idx_str << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
+      os << COLOR_CYAN << name << idx_str << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
     } else
-      os << COLOR_GREEN << packet3_table[i].name << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
+      os << COLOR_GREEN << name << COLOR_CYAN << (pred ? "(P)" :  "") << ":\n";
   }
   /*else
           fprintf(f, COLOR_RED "PKT3_UNKNOWN 0x%x%s" COLOR_RESET ":\n",
