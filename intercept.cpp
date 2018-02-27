@@ -615,6 +615,17 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       case CIK_SDMA_COPY_SUB_OPCODE_TILED:
 	pkt_count = 12;
 	os << "DMA COPY TILED" << "\n";
+	print_named_value(os, "TILED_ADDR_LO", curr[1], 32);
+	print_named_value(os, "TILED_ADDR_HI", curr[2], 32);
+	print_named_value(os, "DW_3", curr[3], 32);
+	print_named_value(os, "SLICE_PITCH", curr[4], 32);
+	print_named_value(os, "DW_5", curr[5], 32);
+	print_named_value(os, "DW_6", curr[6], 32);
+	print_named_value(os, "DW_7", curr[7], 32);
+	print_named_value(os, "LINEAR_ADDR_LO", curr[8], 32);
+	print_named_value(os, "LINEAR_ADDR_HI", curr[9], 32);
+	print_named_value(os, "LINEAR_PITCH", curr[10], 32);
+	print_named_value(os, "COUNT", curr[11], 32);	
 	break;
       case CIK_SDMA_COPY_SUB_OPCODE_LINEAR_SUB_WINDOW:
 	pkt_count = 13;
@@ -691,6 +702,7 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
 	break;
       case SDMA_WRITE_SUB_OPCODE_TILED:
 	os << "DMA WRITE TILED" << "\n";
+	pkt_count = curr[8] + 10;
 	break;
       default:
 	os << "DMA WRITE UNKNOWN" << "\n";
@@ -700,6 +712,7 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       break;
     }
     case CIK_SDMA_OPCODE_INDIRECT_BUFFER:
+      curr += 6;
       break;
     case CIK_SDMA_PACKET_CONSTANT_FILL:
       os << "DMA CONSTANT FILL" << "\n";
@@ -708,6 +721,21 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       print_named_value(os, "DATA", curr[3], 32);
       print_named_value(os, "FILLSIZE", curr[4], 32);
       curr += 5;
+      break;
+    case CIK_SDMA_PACKET_TIMESTAMP:
+      os << "DMA TIMESTAMP" << "\n";
+      curr += 3;
+      break;
+    case CIK_SDMA_PACKET_ATOMIC:
+      os << "DMA ATOMIC" << "\n";
+      break;
+    case CIK_SDMA_PACKET_SEMAPHORE:
+      os << "DMA SEM" << "\n";
+      curr += 3;
+      break;
+    default:
+      os << "DMA UNKNOWN 0x" << std::hex << curr[0] << std::dec << "\n";
+      curr++;
       break;
     }
   }

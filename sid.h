@@ -9099,7 +9099,12 @@
 #define    CIK_SDMA_PACKET_FENCE                   0x5
 #define    CIK_SDMA_PACKET_TRAP                    0x6
 #define    CIK_SDMA_PACKET_SEMAPHORE               0x7
+#define    CIK_SDMA_PACKET_ATOMIC                  0xa
 #define    CIK_SDMA_PACKET_CONSTANT_FILL           0xb
+#define    CIK_SDMA_PACKET_TIMESTAMP               0xd
+#define        CIK_SDMA_TIMESTAMP_SUB_OPCODE_SET          0x0
+#define        CIK_SDMA_TIMESTAMP_SUB_OPCODE_GET          0x1
+#define        CIK_SDMA_TIMESTAMP_SUB_OPCODE_GET_GLOBAL   0x2
 #define    CIK_SDMA_PACKET_SRBM_WRITE              0xe
 #define    CIK_SDMA_COPY_MAX_SIZE                  0x3fffe0
 
