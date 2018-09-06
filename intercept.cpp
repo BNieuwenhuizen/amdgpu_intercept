@@ -284,6 +284,7 @@ void process_packet0(std::ostream &os, uint32_t const *packet) {
 
 static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
 static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
+static void process_si_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
 static size_t cs_id = 0;
 
 void process_packet3(std::ostream &os, uint32_t *packet) {
@@ -580,6 +581,78 @@ static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
       os << "unknown packet type " << PKT_TYPE_G(*curr) << std::hex << " "
          << *curr << std::dec << "\n";
       abort();
+    }
+  }
+}
+
+static void process_si_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
+  while (curr != e) {
+    if (curr > e) {
+      std::cerr << "went past end of IB at CS " << cs_id << ": " << std::hex << curr << " " << e
+                << std::endl;
+      abort();
+    }
+    uint32_t val = curr[0];
+    uint32_t op = (val >> 28) & 0xf;
+    uint32_t size = (val & 0xffffff);
+    uint32_t pkt_count;
+    switch (op) {
+    case SI_DMA_PACKET_NOP:
+      ++curr;
+      os << "DMA NOP" << "\n";
+      break;
+    case SI_DMA_PACKET_CONSTANT_FILL:
+      os << "DMA CONSTANT FILL: " << size << "\n";
+      print_named_value(os, "ADDR_LO", curr[1], 32);
+      print_named_value(os, "DATA", curr[2], 32);
+      print_named_value(os, "ADDR_HI", curr[3], 32);
+      curr += 4;
+      break;
+    case SI_DMA_PACKET_WRITE:
+      os << "DMA WRITE" << "\n";
+      print_named_value(os, "NUM_DWORDS", size, 32);
+      print_named_value(os, "DST_ADDR_LO", curr[1], 32);
+      print_named_value(os, "DST_ADDR_HI", curr[2], 32);
+      pkt_count = size + 3;
+      for (unsigned i = 0; i < size; i++) {
+	  print_spaces(os, INDENT_PKT);
+	  os << "0x" << std::setw(8) << std::setfill('0') << std::hex
+	     << curr[4 + i] << std::dec << "\n";
+      }
+      curr += pkt_count;
+      break;
+    case SI_DMA_PACKET_COPY: {
+      uint32_t sub_op = (val >> 20) & 0xff;
+      switch (sub_op) {
+      case 0x00:
+      case 0x40:
+	os << "DMA COPY" << ((sub_op == 0x40) ? " BYTE" : "") << "\n";
+	print_named_value(os, "NUM_DWORDS", size, 32);
+	print_named_value(os, "DST_ADDR_LO", curr[1], 32);
+	print_named_value(os, "SRC_ADDR_LO", curr[2], 32);
+	print_named_value(os, "DST_ADDR_HI", curr[3], 32);
+	print_named_value(os, "SRC_ADDR_HI", curr[4], 32);
+	curr += 5;
+	break;
+      case 0x41:
+	os << "DMA COPY LINEAR" << "\n";
+	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
+	print_named_value(os, "SRC_ADDR_HI_PITCH", curr[2], 32);
+	print_named_value(os, "SRC_SLICE_PITCH", curr[3], 32);
+	print_named_value(os, "DST_ADDR_LO", curr[4], 32);
+	print_named_value(os, "DST_ADDR_HI_PITCH", curr[5], 32);
+	print_named_value(os, "DST_SLICE_PITCH", curr[6], 32);
+	print_named_value(os, "XY", curr[7], 32);
+	print_named_value(os, "Z", curr[8], 32);
+	curr += 9;
+	break;
+      }
+      break;
+    }
+    default:
+      os << "DMA UNKNOWN 0x" << std::hex << curr[0] << std::dec << "\n";
+      curr++;
+      break;
     }
   }
 }
