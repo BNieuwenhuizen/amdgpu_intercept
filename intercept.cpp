@@ -841,7 +841,7 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
                           cs_type + ".txt");
         out << std::hex << addr << std::dec << "\n";
 	if (ibs_request[i].ip_type == AMDGPU_HW_IP_DMA)
-	  process_dma_ib(out, data, data + size);
+	  process_si_dma_ib(out, data, data + size);
 	else
 	  process_ib(out, data, data + size);
       }
@@ -889,7 +889,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
                         cs_type + ".txt");
       out << std::hex << addr << std::dec << "\n";
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
-        process_dma_ib(out, data, data + size);
+        process_si_dma_ib(out, data, data + size);
       else
 	process_ib(out, data, data + size);
     }
