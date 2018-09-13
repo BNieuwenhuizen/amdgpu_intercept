@@ -635,7 +635,7 @@ static void process_si_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *
 	curr += 5;
 	break;
       case 0x41:
-	os << "DMA COPY LINEAR" << "\n";
+	os << "DMA COPY LINEAR 0x" << std::hex << curr[0] << std::dec << "\n";
 	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
 	print_named_value(os, "SRC_ADDR_HI_PITCH", curr[2], 32);
 	print_named_value(os, "SRC_SLICE_PITCH", curr[3], 32);
@@ -645,6 +645,37 @@ static void process_si_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *
 	print_named_value(os, "XY", curr[7], 32);
 	print_named_value(os, "Z", curr[8], 32);
 	curr += 9;
+	break;
+      case 0x49:
+	os << "DMA COPY L2T 0x" << std::hex << curr[0] << std::dec << "\n";
+	print_named_value(os, "TILE_ADDR_LO", curr[1], 32);
+	print_named_value(os, "TILE_INFO0", curr[2], 32);
+	print_named_value(os, "TILE_PITCH_TILE_MAX", curr[3], 32);
+	print_named_value(os, "TILE_INFO2", curr[4], 32);
+	print_named_value(os, "TILE_INFO3", curr[5], 32);
+	print_named_value(os, "TILE_INFO4", curr[6], 32);
+	print_named_value(os, "LIN_ADDR_LO", curr[7], 32);
+	print_named_value(os, "LIN_ADDR_HI_PITCH", curr[8], 32);
+	print_named_value(os, "LIN_SLICE_PITCH", curr[9], 32);
+	print_named_value(os, "XY", curr[10], 32);
+	print_named_value(os, "Z", curr[11], 32);
+	curr += 12;
+	break;
+      case 0x4d:
+	os << "DMA COPY T2T 0x" << std::hex << curr[0] << std::dec << "\n";
+	print_named_value(os, "SRC_ADDR", curr[1], 32);
+	print_named_value(os, "SRC_INFO1", curr[2], 32);
+	print_named_value(os, "SRC_INFO2", curr[3], 32);
+	print_named_value(os, "DST_ADDR", curr[4], 32);
+	print_named_value(os, "DST_INFO1", curr[5], 32);
+	print_named_value(os, "DST_INFO2", curr[6], 32);
+	print_named_value(os, "INFO0", curr[7], 32);
+	print_named_value(os, "xINFO0", curr[8], 32);
+	print_named_value(os, "yINFO1", curr[9], 32);
+	print_named_value(os, "zINFO2", curr[10], 32);
+	print_named_value(os, "dINFO1", curr[11], 32);
+	print_named_value(os, "dzINFO13", curr[12], 32);
+	curr += 13;
 	break;
       }
       break;
