@@ -1006,7 +1006,7 @@ static void *(*get_real_dlsym())(void *, const char *) {
                                                           (void *)dlsym);
     auto dir = getenv("INTERCEPT_DIR");
     if (!dir || dir[0] == 0)
-      output_dir = "/tmp";
+      output_dir = "/tmp/";
     else {
       output_dir = dir;
       if (output_dir.back() != '/')
