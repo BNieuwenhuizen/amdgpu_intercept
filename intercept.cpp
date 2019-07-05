@@ -1065,7 +1065,7 @@ int amdgpu_bo_free(amdgpu_bo_handle buf_handle) {
     buffers.erase(it);
   }
 
-  ((int (*)(amdgpu_bo_handle))_dl_sym(libdrm_handle, "amdgpu_bo_free",
+  return ((int (*)(amdgpu_bo_handle))_dl_sym(libdrm_handle, "amdgpu_bo_free",
                                       (void *)amdgpu_bo_free))(buf_handle);
 }
 
