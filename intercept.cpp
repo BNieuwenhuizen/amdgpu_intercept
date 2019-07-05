@@ -41,6 +41,7 @@ static void *(*get_real_dlsym())(void *, const char *);
 
 static std::mutex global_mutex;
 static std::string output_dir;
+static bool dump_draws = false;
 
 struct Buffer_info {
   void *data = nullptr;
@@ -262,8 +263,14 @@ dump_shader(std::map<std::vector<std::uint32_t>, std::string> &cache,
 }
 
 static std::uint32_t config_reg;
-void process_set_reg_mask(std::ostream &os, std::uint32_t reg, std::uint32_t value, std::uint32_t mask) {
+void process_set_reg_mask(std::ostream &os, std::uint32_t reg, std::uint32_t value, std::uint32_t mask,
+                          std::map<std::uint32_t, std::uint32_t>& registers) {
   reg &= 0xFFFFFFU;
+
+  if (dump_draws) {
+    registers[reg] = (value & mask) | (registers[reg] & ~mask);
+  }
+
   si_dump_reg(os, reg, value, mask);
 }
 
@@ -275,9 +282,15 @@ std::int64_t get_shader_addr(std::uint32_t lo_value, std::uint32_t value)
   return addr;
 }
 
-void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value) {
+void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value,
+                     std::map<std::uint32_t, std::uint32_t>& registers) {
   reg &= 0xFFFFFFU;
   static std::uint32_t lo_value;
+
+  if (dump_draws) {
+    registers[reg] = value;
+  }
+
   si_dump_reg(os, reg, value, 0xFFFFFFFFU);
   if (reg == R_00B420_SPI_SHADER_PGM_LO_HS && value)
     lo_value = value;
@@ -339,20 +352,39 @@ void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value) {
     config_reg = value;
 }
 
-void process_packet0(std::ostream &os, uint32_t const *packet) {
+void dump_draw(const std::string& draw_description,
+               const std::map<std::uint32_t, std::uint32_t>& registers)
+{
+  if (!dump_draws)
+    return;
+
+  static int draw_id = 0;
+
+  std::ofstream out(output_dir + "draw." + std::to_string(draw_id) + ".txt");
+
+  out << "draw \"" << draw_description << "\"\n";
+
+  for (auto e : registers)
+    si_dump_reg(out, e.first, e.second, 0xFFFFFFFFU);
+  ++draw_id;
+}
+
+void process_packet0(std::ostream &os, uint32_t const *packet,
+                     std::map<std::uint32_t, std::uint32_t>& registers) {
   unsigned reg = PKT0_BASE_INDEX_G(*packet) * 4;
   unsigned cnt = PKT_COUNT_G(*packet) + 1;
   for (unsigned i = 0; i < cnt; ++i) {
-    process_set_reg(os, reg + 4 * i, packet[1 + i]);
+    process_set_reg(os, reg + 4 * i, packet[1 + i], registers);
   }
 }
 
-static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
+static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e, 
+                       std::map<std::uint32_t, std::uint32_t>& registers);
 static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
 static void process_si_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e);
 static size_t cs_id = 0;
 
-void process_packet3(std::ostream &os, uint32_t *packet) {
+void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t, std::uint32_t>& registers) {
   auto op = PKT3_IT_OPCODE_G(*packet);
   auto pred = PKT3_PREDICATE(*packet);
   int i;
@@ -380,12 +412,12 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
   switch (PKT3_IT_OPCODE_G(*packet)) {
   case PKT3_SET_CONTEXT_REG_MASK: {
     unsigned reg = packet[1] * 4 + SI_CONTEXT_REG_OFFSET;
-    process_set_reg_mask(os, reg, packet[3], packet[2]);
+    process_set_reg_mask(os, reg, packet[3], packet[2], registers);
   } break;
   case PKT3_SET_CONTEXT_REG: {
     unsigned reg = packet[1] * 4 + SI_CONTEXT_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
-      process_set_reg(os, reg + 4 * i, packet[2 + i]);
+      process_set_reg(os, reg + 4 * i, packet[2 + i], registers);
     }
   } break;
   case PKT3_LOAD_CONTEXT_REG: {
@@ -398,25 +430,25 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
   case PKT3_SET_SH_REG: {
     unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
-      process_set_reg(os, reg + 4 * i, packet[2 + i]);
+      process_set_reg(os, reg + 4 * i, packet[2 + i], registers);
     }
   } break;
   case PKT3_SET_SH_REG_INDEX: {
     unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
-      process_set_reg(os, reg + 4 * i, packet[2 + i]);
+      process_set_reg(os, reg + 4 * i, packet[2 + i], registers);
     }
   } break;
   case PKT3_SET_CONFIG_REG: {
     unsigned reg = packet[1] * 4 + SI_CONFIG_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
-      process_set_reg(os, reg + 4 * i, packet[2 + i]);
+      process_set_reg(os, reg + 4 * i, packet[2 + i], registers);
     }
   } break;
   case PKT3_SET_UCONFIG_REG: {
     unsigned reg = packet[1] * 4 + CIK_UCONFIG_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
-      process_set_reg(os, reg + 4 * i, packet[2 + i]);
+      process_set_reg(os, reg + 4 * i, packet[2 + i], registers);
     }
   } break;
   case PKT3_CONTEXT_CONTROL:
@@ -475,6 +507,7 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
   case PKT3_DRAW_INDEX_AUTO:
     si_dump_reg(os, R_030930_VGT_NUM_INDICES, packet[1], ~0);
     si_dump_reg(os, R_0287F0_VGT_DRAW_INITIATOR, packet[2], ~0);
+    dump_draw("PKT3_DRAW_INDEX_AUTO", registers);
     break;
   case PKT3_DRAW_INDEX_2:
     si_dump_reg(os, R_028A78_VGT_DMA_MAX_SIZE, packet[1], ~0);
@@ -482,12 +515,19 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
     si_dump_reg(os, R_0287E4_VGT_DMA_BASE_HI, packet[3], ~0);
     si_dump_reg(os, R_030930_VGT_NUM_INDICES, packet[4], ~0);
     si_dump_reg(os, R_0287F0_VGT_DRAW_INITIATOR, packet[5], ~0);
+    dump_draw("PKT3_DRAW_INDEX_2", registers);
     break;
   case PKT3_INDEX_TYPE:
     si_dump_reg(os, R_028A7C_VGT_DMA_INDEX_TYPE, packet[1], ~0);
+    if (dump_draws) {
+      registers[R_028A7C_VGT_DMA_INDEX_TYPE] = packet[1];
+    }
     break;
   case PKT3_NUM_INSTANCES:
     si_dump_reg(os, R_030934_VGT_NUM_INSTANCES, packet[1], ~0);
+    if (dump_draws) {
+      registers[R_030934_VGT_NUM_INSTANCES] = packet[1];
+    }
     break;
   case PKT3_WRITE_DATA:
     si_dump_reg(os, R_370_CONTROL, packet[1], ~0);
@@ -584,6 +624,7 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
       os << "0x" << std::setw(8) << std::setfill('0') << std::hex
          << packet[1 + i] << std::dec << "\n";
     }
+    dump_draw("PKT3_DRAW_INDEX_INDIRECT_MULTI", registers);
     break;
   case PKT3_SET_BASE:
     for (unsigned i = 0; i <= PKT_COUNT_G(packet[0]); i++) {
@@ -611,7 +652,7 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
     va |= packet[1];
     unsigned words = packet[3] & 0xfffff;
     uint32_t *data = (uint32_t *)get_ptr(va, words * 4);
-    process_ib(os, data, data + words);
+    process_ib(os, data, data + words, registers);
   } break;
   case PKT3_NOP:
     os << "     trace id: 0x" << std::setw(8) << std::setfill('0') << std::hex
@@ -619,7 +660,8 @@ void process_packet3(std::ostream &os, uint32_t *packet) {
   }
 }
 
-static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
+static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e,
+                       std::map<std::uint32_t, std::uint32_t>& registers) {
   while (curr != e) {
     if (curr > e) {
       std::cerr << "went past end of IB at CS " << cs_id << ": " << std::hex << curr << " " << e
@@ -628,7 +670,7 @@ static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
     }
     switch (PKT_TYPE_G(*curr)) {
     case 0:
-      process_packet0(os, curr);
+      process_packet0(os, curr, registers);
       curr += 2 + PKT_COUNT_G(*curr);
       break;
     case 2:
@@ -639,7 +681,7 @@ static void process_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) {
         ++curr;
         break;
       }
-      process_packet3(os, curr);
+      process_packet3(os, curr, registers);
       curr += 2 + PKT_COUNT_G(*curr);
       break;
     default:
@@ -907,6 +949,7 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
                      struct amdgpu_cs_request *ibs_request,
                      uint32_t number_of_requests) {
 
+  std::map<std::uint32_t, std::uint32_t> registers;
   for (unsigned i = 0; i < number_of_requests; ++i) {
     for (unsigned j = 0; j < ibs_request[i].number_of_ibs; ++j) {
       auto addr = ibs_request[i].ibs[j].ib_mc_address;
@@ -929,10 +972,11 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
         std::ofstream out(output_dir + "cs." + std::to_string(cs_id) + "." +
                           cs_type + ".txt");
         out << std::hex << addr << std::dec << "\n";
+
 	if (ibs_request[i].ip_type == AMDGPU_HW_IP_DMA)
 	  process_si_dma_ib(out, data, data + size);
 	else
-	  process_ib(out, data, data + size);
+	  process_ib(out, data, data + size, registers);
       }
     }
     ++cs_id;
@@ -951,6 +995,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
 			 struct drm_amdgpu_cs_chunk *chunks,
 			 uint64_t *seq_no)
 {
+  std::map<std::uint32_t, std::uint32_t> registers;
   for (unsigned i = 0; i < num_chunks; ++i) {
     struct drm_amdgpu_cs_chunk_data *chunk_data;
     if (chunks[i].chunk_id != AMDGPU_CHUNK_ID_IB)
@@ -980,7 +1025,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
         process_si_dma_ib(out, data, data + size);
       else
-	process_ib(out, data, data + size);
+	process_ib(out, data, data + size, registers);
     }
     ++cs_id;
   }
@@ -997,6 +1042,7 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
 			 struct drm_amdgpu_cs_chunk *chunks,
 			 uint64_t *seq_no)
 {
+  std::map<std::uint32_t, std::uint32_t> registers;
   for (unsigned i = 0; i < num_chunks; ++i) {
     struct drm_amdgpu_cs_chunk_data *chunk_data;
     if (chunks[i].chunk_id != AMDGPU_CHUNK_ID_IB)
@@ -1026,7 +1072,7 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
         process_dma_ib(out, data, data + size);
       else
-	process_ib(out, data, data + size);
+	process_ib(out, data, data + size, registers);
     }
     ++cs_id;
   }
@@ -1225,6 +1271,11 @@ static void *(*get_real_dlsym())(void *, const char *) {
       if (output_dir.back() != '/')
         output_dir += '/';
     }
+    
+    auto dump_env = getenv("DUMP_DRAWS");
+    dump_draws = false;
+    if (dump_env)
+      dump_draws = atoi(dump_env);
   }
 
   return real_dlsym;
