@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+from __future__ import print_function, division, unicode_literals
 
 CopyRight = '''
 /*
- * Copyright 2015 Advanced Micro Devices, Inc.
+ * Copyright 2015-2019 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -26,8 +26,18 @@ CopyRight = '''
  */
 '''
 
-import sys
+from collections import defaultdict
+import functools
+import itertools
+import json
+import os.path
 import re
+import sys
+
+AMD_REGISTERS = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), "../registers"))
+sys.path.append(AMD_REGISTERS)
+
+from regdb import Object, RegisterDatabase
 
 
 class StringTable:
@@ -61,8 +71,8 @@ class StringTable:
         """
         fragments = [
             '"%s\\0" /* %s */' % (
-                te[0].encode('string_escape'),
-                ', '.join(str(idx) for idx in te[2])
+                te[0].encode('unicode_escape').decode(),
+                ', '.join(str(idx) for idx in sorted(te[2]))
             )
             for te in self.table
         ]
@@ -128,100 +138,121 @@ class IntTable:
         ))
 
 class Field:
-    def __init__(self, reg, s_name):
-        self.s_name = s_name
-        self.name = strip_prefix(s_name)
-        self.values = []
-        self.varname_values = '%s__%s__values' % (reg.r_name.lower(), self.name.lower())
+    def __init__(self, name, bits):
+        self.name = name
+        self.bits = bits   # [first, last]
+        self.values = []   # [(name, value), ...]
 
-class Reg:
-    def __init__(self, r_name):
-        self.r_name = r_name
-        self.name = strip_prefix(r_name)
-        self.fields = []
-        self.own_fields = True
+    def format(self, string_table, idx_table):
+        mask = ((1 << (self.bits[1] - self.bits[0] + 1)) - 1) << self.bits[0]
+        if len(self.values):
+            values_offsets = []
+            for value in self.values:
+                while value[1] >= len(values_offsets):
+                    values_offsets.append(-1)
+                values_offsets[value[1]] = string_table.add(value[0])
+            return '{{{0}, 0x{mask:X}, {1}, {2}}}'.format(
+                string_table.add(self.name),
+                len(values_offsets), idx_table.add(values_offsets),
+                **locals()
+            )
+        else:
+            return '{{{0}, 0x{mask:X}}}'.format(string_table.add(self.name), **locals())
+
+    def __eq__(self, other):
+        return (self.name == other.name and
+                self.bits[0] == other.bits[0] and self.bits[1] == other.bits[1] and
+                len(self.values) == len(other.values) and
+                all(a[0] == b[0] and a[1] == b[1] for a, b, in zip(self.values, other.values)))
+
+    def __ne__(self, other):
+        return not (self == other)
 
 
-def strip_prefix(s):
-    '''Strip prefix in the form ._.*_, e.g. R_001234_'''
-    return s[s[2:].find('_')+3:]
+class FieldTable:
+    """
+    A class for collecting multiple arrays of register fields in a single big
+    array that is used by indexing (to avoid relocations in the resulting binary)
+    """
+    def __init__(self):
+        self.table = []
+        self.idxs = set()
+        self.name_to_idx = defaultdict(lambda: [])
 
-def parse(filename, regs, packets):
-    stream = open(filename)
+    def add(self, array):
+        """
+        Add an array of Field objects, and return the index of where to find
+        the array in the table.
+        """
+        # Check if we can find the array in the table already
+        for base_idx in self.name_to_idx.get(array[0].name, []):
+            if base_idx + len(array) > len(self.table):
+                continue
 
-    for line in stream:
+            for i, a in enumerate(array):
+                b = self.table[base_idx + i]
+                if a != b:
+                    break
+            else:
+                return base_idx
+
+        base_idx = len(self.table)
+        self.idxs.add(base_idx)
+
+        for field in array:
+            self.name_to_idx[field.name].append(len(self.table))
+            self.table.append(field)
+
+        return base_idx
+
+    def emit(self, filp, string_table, idx_table):
+        """
+        Write
+        static const struct si_field sid_fields_table[] = { ... };
+        to filp.
+        """
+        idxs = sorted(self.idxs) + [len(self.table)]
+
+        filp.write('static const struct si_field sid_fields_table[] = {\n')
+
+        for start, end in zip(idxs, idxs[1:]):
+            filp.write('\t/* %s */\n' % (start))
+            for field in self.table[start:end]:
+                filp.write('\t%s,\n' % (field.format(string_table, idx_table)))
+
+        filp.write('};\n')
+
+
+def parse_packet3(filp):
+    """
+    Parse PKT3 commands from the given header file.
+    """
+    packets = []
+    for line in filp:
         if not line.startswith('#define '):
             continue
 
         line = line[8:].strip()
 
-        if line.startswith('R_'):
-            name = line.split()[0]
-
-            for it in regs:
-                if it.r_name == name:
-                    reg = it
-                    break
-            else:
-                reg = Reg(name)
-                regs.append(reg)
-
-        elif line.startswith('S_'):
-            name = line[:line.find('(')]
-
-            for it in reg.fields:
-                if it.s_name == name:
-                    field = it
-                    break
-            else:
-                field = Field(reg, name)
-                reg.fields.append(field)
-
-        elif line.startswith('V_'):
-            split = line.split()
-            name = split[0]
-            value = int(split[1], 0)
-
-            for (n,v) in field.values:
-                if n == name:
-                    if v != value:
-                        sys.exit('Value mismatch: name = ' + name)
-
-            field.values.append((name, value))
-
-        elif line.startswith('PKT3_') and line.find('0x') != -1 and line.find('(') == -1:
+        if line.startswith('PKT3_') and line.find('0x') != -1 and line.find('(') == -1:
             packets.append(line.split()[0])
-
-    # Copy fields to indexed registers which have their fields only defined
-    # at register index 0.
-    # For example, copy fields from CB_COLOR0_INFO to CB_COLORn_INFO, n > 0.
-    match_number = re.compile('[0-9]+')
-    reg_dict = dict()
-
-    # Create a dict of registers with fields and '0' in their name
-    for reg in regs:
-        if len(reg.fields) and reg.name.find('0') != -1:
-            reg_dict[reg.name] = reg
-
-    # Assign fields
-    for reg in regs:
-        if not len(reg.fields):
-            reg0 = reg_dict.get(match_number.sub('0', reg.name))
-            if reg0 != None:
-                reg.fields = reg0.fields
-                reg.fields_owner = reg0
-                reg.own_fields = False
+    return packets
 
 
-def write_tables(regs, packets):
+class TableWriter(object):
+    def __init__(self):
+        self.__strings = StringTable()
+        self.__strings_offsets = IntTable('int')
+        self.__fields = FieldTable()
 
-    strings = StringTable()
-    strings_offsets = IntTable("int")
+    def write(self, regdb, packets, file=sys.stdout):
+        def out(*args):
+            print(*args, file=file)
 
-    print '/* This file is autogenerated by sid_tables.py from sid.h. Do not edit directly. */'
-    print
-    print CopyRight.strip()
-    print '''
+        out('/* This file is autogenerated by sid_tables.py from sid.h. Do not edit directly. */')
+        out()
+        out(CopyRight.strip())
+        out('''
 #ifndef SID_TABLES_H
 #define SID_TABLES_H
 
@@ -243,67 +274,95 @@ struct si_packet3 {
         unsigned name_offset;
         unsigned op;
 };
-'''
+''')
 
-    print 'static const struct si_packet3 packet3_table[] = {'
-    for pkt in packets:
-        print '\t{%s, %s},' % (strings.add(pkt[5:]), pkt)
-    print '};'
-    print
+        out('static const struct si_packet3 packet3_table[] = {')
+        for pkt in packets:
+            out('\t{%s, %s},' % (self.__strings.add(pkt[5:]), pkt))
+        out('};')
+        out()
 
-    print 'static const struct si_field sid_fields_table[] = {'
+        regmaps_by_chip = defaultdict(list)
 
-    fields_idx = 0
-    for reg in regs:
-        if len(reg.fields) and reg.own_fields:
-            print '\t/* %s */' % (fields_idx)
+        for regmap in regdb.register_mappings():
+            for chip in regmap.chips:
+                regmaps_by_chip[chip].append(regmap)
 
-            reg.fields_idx = fields_idx
+        regtypes = {}
 
-            for field in reg.fields:
-                if len(field.values):
-                    values_offsets = []
-                    for value in field.values:
-                        while value[1] >= len(values_offsets):
-                            values_offsets.append(-1)
-                        values_offsets[value[1]] = strings.add(strip_prefix(value[0]))
-                    print '\t{%s, %s(~0u), %s, %s},' % (
-                        strings.add(field.name), field.s_name,
-                        len(values_offsets), strings_offsets.add(values_offsets))
+        # Sorted iteration over chips for deterministic builds
+        for chip in sorted(regmaps_by_chip.keys()):
+            regmaps = regmaps_by_chip[chip]
+            regmaps.sort(key=lambda regmap: (regmap.map.to, regmap.map.at))
+
+            out('static const struct si_reg {chip}_reg_table[] = {{'.format(**locals()))
+
+            for regmap in regmaps:
+                if hasattr(regmap, 'type_ref'):
+                    if not regmap.type_ref in regtypes:
+                        regtype = regdb.register_type(regmap.type_ref)
+                        fields = []
+                        for dbfield in regtype.fields:
+                            field = Field(dbfield.name, dbfield.bits)
+                            if hasattr(dbfield, 'enum_ref'):
+                                enum = regdb.enum(dbfield.enum_ref)
+                                for entry in enum.entries:
+                                    field.values.append((entry.name, entry.value))
+                            fields.append(field)
+
+                        num_fields = len(regtype.fields)
+                        fields_offset = self.__fields.add(fields)
+                        regtypes[regmap.type_ref] = (num_fields, fields_offset)
+                    else:
+                        num_fields, fields_offset = regtypes[regmap.type_ref]
+
+                    print('\t{{{0}, {regmap.map.at}, {num_fields}, {fields_offset}}},'
+                          .format(self.__strings.add(regmap.name), **locals()))
                 else:
-                    print '\t{%s, %s(~0u)},' % (strings.add(field.name), field.s_name)
-                fields_idx += 1
+                    print('\t{{{0}, {regmap.map.at}}},'
+                          .format(self.__strings.add(regmap.name), **locals()))
 
-    print '};'
-    print
+            out('};\n')
 
-    print 'static const struct si_reg sid_reg_table[] = {'
-    for reg in regs:
-        if len(reg.fields):
-            print '\t{%s, %s, %s, %s},' % (strings.add(reg.name), reg.r_name,
-                len(reg.fields), reg.fields_idx if reg.own_fields else reg.fields_owner.fields_idx)
-        else:
-            print '\t{%s, %s},' % (strings.add(reg.name), reg.r_name)
-    print '};'
-    print
+        self.__fields.emit(file, self.__strings, self.__strings_offsets)
 
-    strings.emit(sys.stdout, "sid_strings")
+        out()
 
-    print
+        self.__strings.emit(file, "sid_strings")
 
-    strings_offsets.emit(sys.stdout, "sid_strings_offsets")
+        out()
 
-    print
-    print '#endif'
+        self.__strings_offsets.emit(file, "sid_strings_offsets")
+
+        out()
+        out('#endif')
 
 
 def main():
-    regs = []
-    packets = []
-    for arg in sys.argv[1:]:
-        parse(arg, regs, packets)
-    write_tables(regs, packets)
+    # Parse PKT3 types
+    with open(sys.argv[1], 'r') as filp:
+        packets = parse_packet3(filp)
 
+    # Register database parse
+    regdb = None
+    for filename in sys.argv[2:]:
+        with open(filename, 'r') as filp:
+            try:
+                db = RegisterDatabase.from_json(json.load(filp))
+                if regdb is None:
+                    regdb = db
+                else:
+                    regdb.update(db)
+            except json.JSONDecodeError as e:
+                print('Error reading {}'.format(sys.argv[1]), file=sys.stderr)
+                raise
+
+    # The ac_debug code only distinguishes by chip_class
+    regdb.merge_chips(['gfx8', 'fiji', 'stoney'], 'gfx8')
+
+    # Write it all out
+    w = TableWriter()
+    w.write(regdb, packets)
 
 if __name__ == '__main__':
     main()

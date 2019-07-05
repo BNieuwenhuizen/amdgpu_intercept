@@ -16,9 +16,13 @@ extern "C" {
 #include <string.h>
 #include <vector>
 
+enum radeon_class {
+		 GFX6, GFX7, GFX8, GFX9, GFX10
+};
+enum radeon_class chip_class = GFX10;
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #include "sid.h"
-#include "gfx9d.h"
 #include "sid_tables.h"
 
 #define COLOR_RESET "\033[0m"
@@ -123,14 +127,45 @@ static void print_value(std::ostream &os, uint32_t value, int bits) {
   }
 }
 
+static const struct si_reg *find_register(const struct si_reg *table,
+					  unsigned table_size,
+					  unsigned offset)
+{
+	for (unsigned i = 0; i < table_size; i++) {
+		const struct si_reg *reg = &table[i];
+
+		if (reg->offset == offset)
+			return reg;
+	}
+
+	return NULL;
+}
+
+static const struct si_reg *find_gfx_reg(enum radeon_class chip_class, unsigned offset)
+{
+  const struct si_reg *reg = NULL;
+
+  if (chip_class == GFX10)
+    reg = find_register(gfx10_reg_table, ARRAY_SIZE(gfx10_reg_table), offset);
+  else if (chip_class == GFX9)
+    reg = find_register(gfx9_reg_table, ARRAY_SIZE(gfx9_reg_table), offset);
+  else if (chip_class == GFX8)
+    reg = find_register(gfx8_reg_table, ARRAY_SIZE(gfx8_reg_table), offset);
+  else if (chip_class == GFX7)
+    reg = find_register(gfx7_reg_table, ARRAY_SIZE(gfx7_reg_table), offset);
+  else if (chip_class == GFX6)
+    reg = find_register(gfx6_reg_table, ARRAY_SIZE(gfx6_reg_table), offset);
+  return reg;
+}
+  
+
 static void si_dump_reg(std::ostream &os, unsigned offset, uint32_t value,
                         uint32_t field_mask) {
   int r, f;
 
-  for (r = 0; r < ARRAY_SIZE(sid_reg_table); r++) {
-    const struct si_reg *reg = &sid_reg_table[r];
-
-    if (reg->offset == offset) {
+  const struct si_reg *reg = find_gfx_reg(chip_class, offset);
+  
+  if (reg) {
       bool first_field = true;
       const char *reg_name = sid_strings + reg->name_offset;
 
@@ -164,8 +199,6 @@ static void si_dump_reg(std::ostream &os, unsigned offset, uint32_t value,
 
         first_field = false;
       }
-      return;
-    }
   }
 }
 
@@ -179,11 +212,11 @@ static void print_named_value(std::ostream &os, const char *name,
 static void print_reg_name(std::ostream &os, int offset)
 {
     int r, f;
+    const struct si_reg *reg = find_gfx_reg(chip_class, offset);
 
-  for (r = 0; r < ARRAY_SIZE(sid_reg_table); r++) {
-    const struct si_reg *reg = &sid_reg_table[r];
+  if (reg) {
     const char *reg_name = sid_strings + reg->name_offset;
-
+    
     if (reg->offset == offset) {
       print_spaces(os, INDENT_PKT);
       os << COLOR_YELLOW << reg_name << COLOR_RESET << "\n";
@@ -826,15 +859,8 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       print_named_value(os, "FILLSIZE", curr[4], 32);
       curr += 5;
       break;
-    case CIK_SDMA_PACKET_TIMESTAMP:
+    case CIK_SDMA_OPCODE_TIMESTAMP:
       os << "DMA TIMESTAMP" << "\n";
-      curr += 3;
-      break;
-    case CIK_SDMA_PACKET_ATOMIC:
-      os << "DMA ATOMIC" << "\n";
-      break;
-    case CIK_SDMA_PACKET_SEMAPHORE:
-      os << "DMA SEM" << "\n";
       curr += 3;
       break;
     default:
