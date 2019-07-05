@@ -268,6 +268,7 @@ void process_set_reg_mask(std::ostream &os, std::uint32_t reg, std::uint32_t val
 std::int64_t get_shader_addr(std::uint32_t lo_value, std::uint32_t value)
 {
   std::int64_t addr = (std::int32_t)value << 24;
+  addr <<= 16;
   addr |= (static_cast<uint64_t>(lo_value) << 8);
   return addr;
 }
