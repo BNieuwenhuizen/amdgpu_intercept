@@ -34,6 +34,7 @@ enum radeon_class chip_class = GFX10;
 #define INDENT_PKT 8
 
 static void *(*real_dlsym)(void *, const char *) = NULL;
+static void *libdrm_handle = NULL;
 
 extern "C" void *_dl_sym(void *, const char *, void *);
 static void *(*get_real_dlsym())(void *, const char *);
@@ -200,6 +201,7 @@ static void si_dump_reg(std::ostream &os, unsigned offset, uint32_t value,
         first_field = false;
       }
   }
+  os << std::hex << "unknown reg " << offset << "  = " << value << std::dec << "\n";
 }
 
 static void print_named_value(std::ostream &os, const char *name,
@@ -937,7 +939,7 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
   }
 
   return ((int (*)(amdgpu_context_handle, uint64_t, struct amdgpu_cs_request *,
-                   uint32_t))_dl_sym(RTLD_NEXT, "amdgpu_cs_submit",
+                   uint32_t))_dl_sym(libdrm_handle, "amdgpu_cs_submit",
                                      (void *)amdgpu_cs_submit))(
       context, flags, ibs_request, number_of_requests);
 }
@@ -983,7 +985,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
     ++cs_id;
   }
   return ((int (*)(amdgpu_device_handle, amdgpu_context_handle, amdgpu_bo_list_handle, int, struct drm_amdgpu_cs_chunk *,
-                   uint64_t *))_dl_sym(RTLD_NEXT, "amdgpu_cs_submit_raw",
+                   uint64_t *))_dl_sym(libdrm_handle, "amdgpu_cs_submit_raw",
                                      (void *)amdgpu_cs_submit_raw))(
       device, context, resources, num_chunks, chunks, seq_no);
 }
@@ -1029,7 +1031,7 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
     ++cs_id;
   }
   return ((int (*)(amdgpu_device_handle, amdgpu_context_handle, uint32_t, int, struct drm_amdgpu_cs_chunk *,
-                   uint64_t *))_dl_sym(RTLD_NEXT, "amdgpu_cs_submit_raw2",
+                   uint64_t *))_dl_sym(libdrm_handle, "amdgpu_cs_submit_raw2",
                                      (void *)amdgpu_cs_submit_raw2))(
       device, context, bo_list_handle, num_chunks, chunks, seq_no);
 }
@@ -1040,7 +1042,7 @@ int amdgpu_bo_alloc(amdgpu_device_handle dev,
   std::lock_guard<std::mutex> lock(global_mutex);
 
   auto ret = ((int (*)(amdgpu_device_handle, struct amdgpu_bo_alloc_request *,
-                       amdgpu_bo_handle *))_dl_sym(RTLD_NEXT, "amdgpu_bo_alloc",
+                       amdgpu_bo_handle *))_dl_sym(libdrm_handle, "amdgpu_bo_alloc",
                                                    (void *)amdgpu_bo_alloc))(
       dev, alloc_buffer, buf_handle);
   if (ret) {
@@ -1057,13 +1059,13 @@ int amdgpu_bo_free(amdgpu_bo_handle buf_handle) {
   auto it = buffers.find(buf_handle);
   if (it != buffers.end()) {
     if (it->second.data)
-      ((void (*)(amdgpu_bo_handle))_dl_sym(RTLD_NEXT, "amdgpu_bo_cpu_unmap",
+      ((void (*)(amdgpu_bo_handle))_dl_sym(libdrm_handle, "amdgpu_bo_cpu_unmap",
                                            (void *)amdgpu_bo_cpu_unmap))(
           buf_handle);
     buffers.erase(it);
   }
 
-  ((int (*)(amdgpu_bo_handle))_dl_sym(RTLD_NEXT, "amdgpu_bo_free",
+  ((int (*)(amdgpu_bo_handle))_dl_sym(libdrm_handle, "amdgpu_bo_free",
                                       (void *)amdgpu_bo_free))(buf_handle);
 }
 
@@ -1076,7 +1078,7 @@ int amdgpu_bo_cpu_map(amdgpu_bo_handle buf_handle, void **cpu) {
   }
 
   int ret = ((int (*)(amdgpu_bo_handle, void **))_dl_sym(
-      RTLD_NEXT, "amdgpu_bo_cpu_map", (void *)amdgpu_bo_cpu_map))(buf_handle,
+      libdrm_handle, "amdgpu_bo_cpu_map", (void *)amdgpu_bo_cpu_map))(buf_handle,
                                                                   cpu);
   if (ret)
     return ret;
@@ -1089,7 +1091,7 @@ int amdgpu_bo_cpu_map(amdgpu_bo_handle buf_handle, void **cpu) {
 
 int amdgpu_bo_cpu_unmap(amdgpu_bo_handle buf_handle) {
   int ret = ((int (*)(amdgpu_bo_handle))_dl_sym(
-      RTLD_NEXT, "amdgpu_bo_cpu_unmap", (void *)amdgpu_bo_cpu_unmap))(
+      libdrm_handle, "amdgpu_bo_cpu_unmap", (void *)amdgpu_bo_cpu_unmap))(
       buf_handle);
   if (ret)
     return ret;
@@ -1105,7 +1107,7 @@ int amdgpu_bo_cpu_unmap(amdgpu_bo_handle buf_handle) {
 int amdgpu_bo_va_op(amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
                     uint64_t addr, uint64_t flags, uint32_t ops) {
   int ret = ((int (*)(amdgpu_bo_handle, uint64_t, uint64_t, uint64_t, uint64_t,
-                      uint32_t))_dl_sym(RTLD_NEXT, "amdgpu_bo_va_op",
+                      uint32_t))_dl_sym(libdrm_handle, "amdgpu_bo_va_op",
                                         (void *)amdgpu_bo_va_op))(
       bo, offset, size, addr, flags, ops);
   if (ret)
@@ -1131,7 +1133,7 @@ int amdgpu_bo_va_op(amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
 int amdgpu_bo_va_op_raw(amdgpu_device_handle dev, amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
                     uint64_t addr, uint64_t flags, uint32_t ops) {
   int ret = ((int (*)(amdgpu_device_handle, amdgpu_bo_handle, uint64_t, uint64_t, uint64_t, uint64_t,
-                      uint32_t))_dl_sym(RTLD_NEXT, "amdgpu_bo_va_op_raw",
+                      uint32_t))_dl_sym(libdrm_handle, "amdgpu_bo_va_op_raw",
                                         (void *)amdgpu_bo_va_op_raw))(
       dev, bo, offset, size, addr, flags, ops);
   if (ret)
@@ -1158,7 +1160,7 @@ extern "C" int amdgpu_bo_va_op_refcounted(amdgpu_device_handle dev,
 amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
                     uint64_t addr, uint64_t flags, uint32_t ops) {
   int ret = ((int (*)(amdgpu_device_handle, amdgpu_bo_handle, uint64_t, uint64_t, uint64_t, uint64_t,
-                      uint32_t))_dl_sym(RTLD_NEXT, "amdgpu_bo_va_op_refcounted",
+                      uint32_t))_dl_sym(libdrm_handle, "amdgpu_bo_va_op_refcounted",
                                         (void *)amdgpu_bo_va_op))(
       dev, bo, offset, size, addr, flags, ops);
   if (ret)
@@ -1210,6 +1212,9 @@ extern "C" void *dlsym(void *handle, const char *name) {
 extern "C" void *__libc_dlsym(void *, const char *);
 static void *(*get_real_dlsym())(void *, const char *) {
   if (real_dlsym == NULL) {
+    std::cerr << "init dlsym\n";
+    libdrm_handle = dlopen("libdrm_amdgpu.so", RTLD_LAZY | RTLD_LOCAL);
+    std::cerr << "libdrm_amdgpu handle: " << libdrm_handle << "\n";
     real_dlsym = (void *(*)(void *, const char *))_dl_sym(RTLD_NEXT, "dlsym",
                                                           (void *)dlsym);
     auto dir = getenv("INTERCEPT_DIR");
