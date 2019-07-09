@@ -282,6 +282,17 @@ std::int64_t get_shader_addr(std::uint32_t lo_value, std::uint32_t value)
   return addr;
 }
 
+void dump_shader_from_addr(std::ostream &os, std::map<std::vector<std::uint32_t>, std::string> &cache,
+		           const char *nm, std::uint32_t lo_value, std::uint32_t value)
+{
+  std::int64_t s_addr = get_shader_addr(lo_value, value);
+  if (s_addr) {
+    auto s = dump_shader(cache, nm, s_addr);
+    print_spaces(os, 8);
+    os << s << "\n";
+  }
+}
+
 void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value,
                      std::map<std::uint32_t, std::uint32_t>& registers) {
   reg &= 0xFFFFFFU;
@@ -292,60 +303,46 @@ void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value,
   }
 
   si_dump_reg(os, reg, value, 0xFFFFFFFFU);
-  if (reg == R_00B420_SPI_SHADER_PGM_LO_HS && value)
+  if (reg == R_00B420_SPI_SHADER_PGM_LO_HS)
     lo_value = value;
-  if (reg == R_00B424_SPI_SHADER_PGM_HI_HS && value) {
-    auto s = dump_shader(hs_shaders, "hs", get_shader_addr(lo_value, value));
-    print_spaces(os, 8);
-    os << s << "\n";
+  if (reg == R_00B424_SPI_SHADER_PGM_HI_HS) {
+    dump_shader_from_addr(os, hs_shaders, "hs", lo_value, value);
     lo_value = 0;
   }
-  if (reg == R_00B020_SPI_SHADER_PGM_LO_PS && value)
+  if (reg == R_00B020_SPI_SHADER_PGM_LO_PS)
     lo_value = value;
-  if (reg == R_00B024_SPI_SHADER_PGM_HI_PS && value) {
-    auto s = dump_shader(ps_shaders, "ps", get_shader_addr(lo_value, value));
-    print_spaces(os, 8);
-    os << s << "\n";
+  if (reg == R_00B024_SPI_SHADER_PGM_HI_PS) {
+    dump_shader_from_addr(os, ps_shaders, "ps", lo_value, value);
     lo_value = 0;
   }
-  if (reg == R_00B120_SPI_SHADER_PGM_LO_VS && value)
+  if (reg == R_00B120_SPI_SHADER_PGM_LO_VS)
     lo_value = value;
-  if (reg == R_00B124_SPI_SHADER_PGM_HI_VS && value) {
-    auto s = dump_shader(vs_shaders, "vs", get_shader_addr(lo_value, value));
-    print_spaces(os, 8);
-    os << s << "\n";
+  if (reg == R_00B124_SPI_SHADER_PGM_HI_VS) {
+    dump_shader_from_addr(os, vs_shaders, "vs", lo_value, value);
     lo_value = 0;
   }
-  if (reg == R_00B320_SPI_SHADER_PGM_LO_ES && value)
+  if (reg == R_00B320_SPI_SHADER_PGM_LO_ES)
     lo_value = value;
-  if (reg == R_00B324_SPI_SHADER_PGM_HI_ES && value) {
-    auto s = dump_shader(es_shaders, "es", get_shader_addr(lo_value, value));
-    print_spaces(os, 8);
-    os << s << "\n";
+  if (reg == R_00B324_SPI_SHADER_PGM_HI_ES) {
+    dump_shader_from_addr(os, es_shaders, "es", lo_value, value);
     lo_value = 0;
   }
-  if (reg == R_00B220_SPI_SHADER_PGM_LO_GS && value)
+  if (reg == R_00B220_SPI_SHADER_PGM_LO_GS)
     lo_value = value;
-  if (reg == R_00B224_SPI_SHADER_PGM_HI_GS && value) {
-    auto s = dump_shader(gs_shaders, "gs", get_shader_addr(lo_value, value));
-    print_spaces(os, 8);
-    os << s << "\n";
+  if (reg == R_00B224_SPI_SHADER_PGM_HI_GS) {
+    dump_shader_from_addr(os, gs_shaders, "gs", lo_value, value);
     lo_value = 0;
   }
-  if (reg == R_00B520_SPI_SHADER_PGM_LO_LS && value)
+  if (reg == R_00B520_SPI_SHADER_PGM_LO_LS)
     lo_value = value;
-  if (reg == R_00B524_SPI_SHADER_PGM_HI_LS && value) {
-    auto s = dump_shader(ls_shaders, "ls", get_shader_addr(lo_value, value));
-    print_spaces(os, 8);
-    os << s << "\n";
+  if (reg == R_00B524_SPI_SHADER_PGM_HI_LS) {
+    dump_shader_from_addr(os, ls_shaders, "ls", lo_value, value);
     lo_value = 0;
   }
-  if (reg == R_00B830_COMPUTE_PGM_LO && value)
+  if (reg == R_00B830_COMPUTE_PGM_LO)
     lo_value = value;
-  if (reg == R_00B834_COMPUTE_PGM_HI && value) {
-    auto s = dump_shader(cs_shaders, "cs", get_shader_addr(lo_value, value));
-    print_spaces(os, 8);
-    os << s << "\n";
+  if (reg == R_00B834_COMPUTE_PGM_HI) {
+    dump_shader_from_addr(os, cs_shaders, "cs", lo_value, value);
     lo_value = 0;
   }
   if (reg == R_00B450_SPI_SHADER_USER_DATA_HS_8)
