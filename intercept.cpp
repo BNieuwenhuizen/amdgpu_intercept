@@ -423,11 +423,45 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     }
   } break;
   case PKT3_LOAD_CONTEXT_REG: {
-    unsigned reg = packet[3] * 4 + SI_CONTEXT_REG_OFFSET;
+    unsigned reg = (packet[3] & 0xffff) * 4 + SI_CONTEXT_REG_OFFSET;
     print_named_value(os, "ADDR_LO", packet[1], 32);
     print_named_value(os, "ADDR_HI", packet[2] & 0xffff, 32);
+    print_named_value(os, "NUM_DWORDS", packet[4] & 0xffff, 32);
     print_reg_name(os, packet[3] * 4 + SI_CONTEXT_REG_OFFSET);
-    print_named_value(os, "DWORDS", packet[4], 32);
+  } break;
+  case PKT3_LOAD_CONTEXT_REG_INDEX: {
+    unsigned reg = packet[3] * 4 + SI_CONTEXT_REG_OFFSET;
+    print_named_value(os, "ADDR_LO", packet[1] & ~0x3, 32);
+    print_named_value(os, "ADDR_HI", packet[2] & 0xffff, 32);
+    print_named_value(os, "NUM_DWORDS", packet[4] & 0xffff, 32);
+    print_reg_name(os, packet[3] * 4 + SI_CONTEXT_REG_OFFSET);
+    std::uint64_t va = static_cast<std::uint64_t>(packet[2]) << 32;
+    va |= (packet[1] & ~0x3);
+    std::uint32_t num_dwords = packet[4] & 0xffff;
+    uint32_t *data = (uint32_t *)get_ptr(va, num_dwords << 2);
+    if (data) {
+      for (unsigned i = 0; i < num_dwords; i+=2) {
+	unsigned reg = data[i] * 4 + SI_CONTEXT_REG_OFFSET;
+	process_set_reg(os, reg, data[i + 1], registers);
+      }
+    }
+  } break;
+  case PKT3_LOAD_SH_REG_INDEX: {
+    unsigned reg = (packet[3] & 0xffff) * 4 + SI_SH_REG_OFFSET;
+    print_named_value(os, "ADDR_LO", packet[1] & ~0x3, 32);
+    print_named_value(os, "ADDR_HI", packet[2] & 0xffff, 32);
+    print_named_value(os, "NUM_DWORDS", packet[4] & 0x3fff, 32);
+    print_reg_name(os, reg);
+    std::uint64_t va = static_cast<std::uint64_t>(packet[2] & 0xffff) << 32;
+    va |= (packet[1] & ~0x3);
+    std::uint32_t num_dwords = packet[4] & 0x3fff;
+    uint32_t *data = (uint32_t *)get_ptr(va, num_dwords << 2);
+    if (data) {
+      for (unsigned i = 0; i < num_dwords; i+=2) {
+	unsigned reg = data[i] * 4 + SI_SH_REG_OFFSET;
+	process_set_reg(os, reg, data[i + 1], registers);
+      }
+    }
   } break;
   case PKT3_SET_SH_REG: {
     unsigned reg = packet[1] * 4 + SI_SH_REG_OFFSET;
