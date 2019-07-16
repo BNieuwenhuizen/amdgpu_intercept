@@ -437,7 +437,7 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     bool load_index = !!(packet[3] & (1 << 31));
     std::uint64_t va = static_cast<std::uint64_t>(packet[2]) << 32;
     va |= (packet[1] & ~0x3);
-    std::uint32_t num_dwords = packet[4] & 0xffff;
+    std::uint32_t num_dwords = (packet[4] & 0xffff) * (load_index ? 2 : 1);
     uint32_t *data = (uint32_t *)get_ptr(va, num_dwords << 2);
     if (data) {
       if (load_index) {
@@ -462,7 +462,7 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     bool load_index = !!(packet[3] & (1 << 31));
     std::uint64_t va = static_cast<std::uint64_t>(packet[2]) << 32;
     va |= (packet[1] & ~0x3);
-    std::uint32_t num_dwords = packet[4] & 0xffff;
+    std::uint32_t num_dwords = (packet[4] & 0xffff) * (load_index ? 2 : 1);
     uint32_t *data = (uint32_t *)get_ptr(va, num_dwords << 2);
     if (data) {
       if (load_index) {
