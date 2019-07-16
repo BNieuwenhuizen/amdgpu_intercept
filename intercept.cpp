@@ -81,7 +81,11 @@ void *get_ptr(uint64_t addr, uint64_t size) {
   }
   if (!buf_it->second.data) {
     lock.unlock();
-    amdgpu_bo_cpu_map(buf_it->first, &buf_it->second.data);
+    int ret = amdgpu_bo_cpu_map(buf_it->first, &buf_it->second.data);
+    if (ret) {
+      fprintf(stderr, "failed to cpu map, %d\n", ret);
+      return nullptr;
+    }
     lock.lock();
   }
 
