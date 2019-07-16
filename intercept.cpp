@@ -201,6 +201,7 @@ static void si_dump_reg(std::ostream &os, unsigned offset, uint32_t value,
 
         first_field = false;
       }
+      return;
   }
   os << std::hex << "unknown reg " << offset << "  = " << value << std::dec << "\n";
 }
@@ -393,7 +394,7 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
   if (i < ARRAY_SIZE(packet3_table)) {
     const char *name = sid_strings + packet3_table[i].name_offset;
     if (op == PKT3_SET_CONTEXT_REG || op == PKT3_SET_CONFIG_REG ||
-        op == PKT3_SET_UCONFIG_REG || op == PKT3_SET_SH_REG || op == PKT3_SET_SH_REG_INDEX) {
+        op == PKT3_SET_UCONFIG_REG || op == PKT3_SET_SH_REG || op == PKT3_SET_SH_REG_INDEX || op == PKT3_SET_UCONFIG_REG_INDEX) {
       auto idx = (packet[1] >> 28) & 0x7;
       char idx_str[5] = {0};
       if (idx)
@@ -442,7 +443,8 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
       process_set_reg(os, reg + 4 * i, packet[2 + i], registers);
     }
   } break;
-  case PKT3_SET_UCONFIG_REG: {
+  case PKT3_SET_UCONFIG_REG:
+  case PKT3_SET_UCONFIG_REG_INDEX: {
     unsigned reg = packet[1] * 4 + CIK_UCONFIG_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
       process_set_reg(os, reg + 4 * i, packet[2 + i], registers);
