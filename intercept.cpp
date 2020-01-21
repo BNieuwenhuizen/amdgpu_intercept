@@ -33,15 +33,215 @@ enum radeon_class chip_class = GFX10;
 
 #define INDENT_PKT 8
 
-static void *(*real_dlsym)(void *, const char *) = NULL;
-static void *libdrm_handle = NULL;
-
-extern "C" void *_dl_sym(void *, const char *, void *);
-static void *(*get_real_dlsym())(void *, const char *);
-
 static std::mutex global_mutex;
-static std::string output_dir;
-static bool dump_draws = false;
+static std::string internal_output_dir;
+static bool internal_dump_draws = false;
+
+static std::once_flag env_vars_once_flag;
+static void parse_env_vars() {
+  auto dir = getenv("INTERCEPT_DIR");
+  if (!dir || dir[0] == 0)
+    internal_output_dir = "/tmp/";
+  else {
+    internal_output_dir = dir;
+    if (internal_output_dir.back() != '/')
+      internal_output_dir += '/';
+  }
+
+  auto dump_env = getenv("DUMP_DRAWS");
+  internal_dump_draws = false;
+  if (dump_env)
+    internal_dump_draws = atoi(dump_env);
+}
+
+
+static bool get_dump_draws() {
+  std::call_once(env_vars_once_flag, parse_env_vars);
+  return internal_dump_draws;
+}
+
+static const std::string &get_output_dir() {
+  std::call_once(env_vars_once_flag, parse_env_vars);
+  return internal_output_dir;
+}
+
+static void* load_libdrm_handle() {
+  void *handle = dlopen("/usr/lib/libdrm_amdgpu.so", RTLD_LOCAL | RTLD_LAZY);
+  if (handle)
+    return handle;
+  fprintf(stderr, "internal libdrm_amdgpu.so not found\n");
+  abort();
+}
+
+struct VTable {
+  typeof(&amdgpu_cs_ctx_create2)               fn_cs_ctx_create2;
+  typeof(&amdgpu_cs_syncobj_import_sync_file)  fn_cs_syncobj_import_sync_file;
+  typeof(&amdgpu_cs_query_reset_state)         fn_cs_query_reset_state;
+  typeof(&amdgpu_bo_cpu_unmap)                 fn_bo_cpu_unmap;
+  typeof(&amdgpu_va_range_alloc)               fn_va_range_alloc;
+  typeof(&amdgpu_cs_syncobj_import_sync_file2) fn_cs_syncobj_import_sync_file2;
+  typeof(&amdgpu_cs_signal_semaphore)          fn_cs_signal_semaphore;
+  typeof(&amdgpu_create_bo_from_user_mem)      fn_create_bo_from_user_mem;
+  typeof(&amdgpu_cs_syncobj_export_sync_file2) fn_cs_syncobj_export_sync_file2;
+  typeof(&amdgpu_bo_list_destroy_raw)          fn_bo_list_destroy_raw;
+  typeof(&amdgpu_cs_syncobj_reset)             fn_cs_syncobj_reset;
+  typeof(&amdgpu_query_crtc_from_id)           fn_query_crtc_from_id;
+  typeof(&amdgpu_bo_cpu_map)                   fn_bo_cpu_map;
+  typeof(&amdgpu_vm_reserve_vmid)              fn_vm_reserve_vmid;
+  typeof(&amdgpu_query_hw_ip_info)             fn_query_hw_ip_info;
+  typeof(&amdgpu_bo_list_destroy)              fn_bo_list_destroy;
+  typeof(&amdgpu_query_buffer_size_alignment)  fn_query_buffer_size_alignment;
+  typeof(&amdgpu_bo_wait_for_idle)             fn_bo_wait_for_idle;
+  typeof(&amdgpu_cs_syncobj_wait)              fn_cs_syncobj_wait;
+  typeof(&amdgpu_cs_ctx_override_priority)     fn_cs_ctx_override_priority;
+  typeof(&amdgpu_query_hw_ip_count)            fn_query_hw_ip_count;
+  typeof(&amdgpu_query_info)                   fn_query_info;
+  typeof(&amdgpu_query_sw_info)                fn_query_sw_info;
+  typeof(&amdgpu_cs_syncobj_transfer)          fn_cs_syncobj_transfer;
+  typeof(&amdgpu_query_gpu_info)               fn_query_gpu_info;
+  typeof(&amdgpu_cs_chunk_fence_to_dep)        fn_cs_chunk_fence_to_dep;
+  typeof(&amdgpu_cs_destroy_semaphore)         fn_cs_destroy_semaphore;
+  typeof(&amdgpu_cs_ctx_create)                fn_cs_ctx_create;
+  typeof(&amdgpu_cs_syncobj_timeline_wait)     fn_cs_syncobj_timeline_wait;
+  typeof(&amdgpu_read_mm_registers)            fn_read_mm_registers;
+  typeof(&amdgpu_cs_import_syncobj)            fn_cs_import_syncobj;
+  typeof(&amdgpu_query_sensor_info)            fn_query_sensor_info;
+  typeof(&amdgpu_bo_query_info)                fn_bo_query_info;
+  typeof(&amdgpu_bo_set_metadata)              fn_bo_set_metadata;
+  typeof(&amdgpu_bo_list_create)               fn_bo_list_create;
+  typeof(&amdgpu_bo_va_op_raw)                 fn_bo_va_op_raw;
+  typeof(&amdgpu_device_initialize)            fn_device_initialize;
+  typeof(&amdgpu_cs_wait_fences)               fn_cs_wait_fences;
+  typeof(&amdgpu_vm_unreserve_vmid)            fn_vm_unreserve_vmid;
+  typeof(&amdgpu_bo_export)                    fn_bo_export;
+  typeof(&amdgpu_device_deinitialize)          fn_device_deinitialize;
+  typeof(&amdgpu_get_marketing_name)           fn_get_marketing_name;
+  typeof(&amdgpu_cs_syncobj_export_sync_file)  fn_cs_syncobj_export_sync_file;
+  typeof(&amdgpu_cs_chunk_fence_info_to_data)  fn_cs_chunk_fence_info_to_data;
+  typeof(&amdgpu_cs_create_syncobj)            fn_cs_create_syncobj;
+  typeof(&amdgpu_va_range_query)               fn_va_range_query;
+  typeof(&amdgpu_cs_query_reset_state2)        fn_cs_query_reset_state2;
+  typeof(&amdgpu_bo_alloc)                     fn_bo_alloc;
+  typeof(&amdgpu_va_range_free)                fn_va_range_free;
+  typeof(&amdgpu_cs_export_syncobj)            fn_cs_export_syncobj;
+  typeof(&amdgpu_bo_va_op)                     fn_bo_va_op;
+  typeof(&amdgpu_bo_inc_ref)                   fn_bo_inc_ref;
+  typeof(&amdgpu_find_bo_by_cpu_mapping)       fn_find_bo_by_cpu_mapping;
+  typeof(&amdgpu_cs_submit)                    fn_cs_submit;
+  typeof(&amdgpu_query_gds_info)               fn_query_gds_info;
+  typeof(&amdgpu_cs_submit_raw2)               fn_cs_submit_raw2;
+  typeof(&amdgpu_cs_destroy_syncobj)           fn_cs_destroy_syncobj;
+  typeof(&amdgpu_query_heap_info)              fn_query_heap_info;
+  typeof(&amdgpu_cs_create_syncobj2)           fn_cs_create_syncobj2;
+  typeof(&amdgpu_cs_submit_raw)                fn_cs_submit_raw;
+  typeof(&amdgpu_cs_create_semaphore)          fn_cs_create_semaphore;
+  typeof(&amdgpu_cs_wait_semaphore)            fn_cs_wait_semaphore;
+  typeof(&amdgpu_bo_list_update)               fn_bo_list_update;
+  typeof(&amdgpu_bo_import)                    fn_bo_import;
+  typeof(&amdgpu_cs_syncobj_timeline_signal)   fn_cs_syncobj_timeline_signal;
+  typeof(&amdgpu_cs_fence_to_handle)           fn_cs_fence_to_handle;
+  typeof(&amdgpu_cs_ctx_free)                  fn_cs_ctx_free;
+  typeof(&amdgpu_cs_query_fence_status)        fn_cs_query_fence_status;
+  typeof(&amdgpu_cs_syncobj_signal)            fn_cs_syncobj_signal;
+  typeof(&amdgpu_cs_syncobj_query2)            fn_cs_syncobj_query2;
+  typeof(&amdgpu_cs_syncobj_query)             fn_cs_syncobj_query;
+  typeof(&amdgpu_query_firmware_version)       fn_query_firmware_version;
+  typeof(&amdgpu_bo_list_create_raw)           fn_bo_list_create_raw;
+  typeof(&amdgpu_bo_free)                      fn_bo_free;
+};
+
+static VTable vtable;
+static std::once_flag vtable_once_flag;
+
+static void load_vtable() {
+  void *handle = load_libdrm_handle();
+#define HANDLE(v)                                                  \
+  vtable.fn_##v = (typeof(&amdgpu_##v))dlsym(handle, "amdgpu_" #v); \
+  if (!vtable.fn_##v) {                                            \
+    fprintf(stderr, "Failed to load \"amdgpu_" #v "\"\n");         \
+    abort();                                                       \
+  }
+  HANDLE(cs_ctx_create2)
+  HANDLE(cs_syncobj_import_sync_file)
+  HANDLE(cs_query_reset_state)
+  HANDLE(bo_cpu_unmap)
+  HANDLE(va_range_alloc)
+  HANDLE(cs_syncobj_import_sync_file2)
+  HANDLE(cs_signal_semaphore)
+  HANDLE(create_bo_from_user_mem)
+  HANDLE(cs_syncobj_export_sync_file2)
+  HANDLE(bo_list_destroy_raw)
+  HANDLE(cs_syncobj_reset)
+  HANDLE(query_crtc_from_id)
+  HANDLE(bo_cpu_map)
+  HANDLE(vm_reserve_vmid)
+  HANDLE(query_hw_ip_info)
+  HANDLE(bo_list_destroy)
+  HANDLE(query_buffer_size_alignment)
+  HANDLE(bo_wait_for_idle)
+  HANDLE(cs_syncobj_wait)
+  HANDLE(cs_ctx_override_priority)
+  HANDLE(query_hw_ip_count)
+  HANDLE(query_info)
+  HANDLE(query_sw_info)
+  HANDLE(cs_syncobj_transfer)
+  HANDLE(query_gpu_info)
+  HANDLE(cs_chunk_fence_to_dep)
+  HANDLE(cs_destroy_semaphore)
+  HANDLE(cs_ctx_create)
+  HANDLE(cs_syncobj_timeline_wait)
+  HANDLE(read_mm_registers)
+  HANDLE(cs_import_syncobj)
+  HANDLE(query_sensor_info)
+  HANDLE(bo_query_info)
+  HANDLE(bo_set_metadata)
+  HANDLE(bo_list_create)
+  HANDLE(bo_va_op_raw)
+  HANDLE(device_initialize)
+  HANDLE(cs_wait_fences)
+  HANDLE(vm_unreserve_vmid)
+  HANDLE(bo_export)
+  HANDLE(device_deinitialize)
+  HANDLE(get_marketing_name)
+  HANDLE(cs_syncobj_export_sync_file)
+  HANDLE(cs_chunk_fence_info_to_data)
+  HANDLE(cs_create_syncobj)
+  HANDLE(va_range_query)
+  HANDLE(cs_query_reset_state2)
+  HANDLE(bo_alloc)
+  HANDLE(va_range_free)
+  HANDLE(cs_export_syncobj)
+  HANDLE(bo_va_op)
+  HANDLE(bo_inc_ref)
+  HANDLE(find_bo_by_cpu_mapping)
+  HANDLE(cs_submit)
+  HANDLE(query_gds_info)
+  HANDLE(cs_submit_raw2)
+  HANDLE(cs_destroy_syncobj)
+  HANDLE(query_heap_info)
+  HANDLE(cs_create_syncobj2)
+  HANDLE(cs_submit_raw)
+  HANDLE(cs_create_semaphore)
+  HANDLE(cs_wait_semaphore)
+  HANDLE(bo_list_update)
+  HANDLE(bo_import)
+  HANDLE(cs_syncobj_timeline_signal)
+  HANDLE(cs_fence_to_handle)
+  HANDLE(cs_ctx_free)
+  HANDLE(cs_query_fence_status)
+  HANDLE(cs_syncobj_signal)
+  HANDLE(cs_syncobj_query2)
+  HANDLE(cs_syncobj_query)
+  HANDLE(query_firmware_version)
+  HANDLE(bo_list_create_raw)
+  HANDLE(bo_free)
+#undef HANDLE
+}
+
+const VTable& get_vtable() {
+  std::call_once(vtable_once_flag, load_vtable);
+  return vtable;
+}
 
 struct Buffer_info {
   void *data = nullptr;
@@ -259,7 +459,7 @@ dump_shader(std::map<std::vector<std::uint32_t>, std::string> &cache,
   dump.write((char *)data, (end - data) * 4);
   dump.close();
   std::string cmd_line =
-      "clrxdisasm -r -g Tonga /tmp/shader_binary > " + output_dir + name + ".s";
+      "clrxdisasm -r -g Tonga /tmp/shader_binary > " + get_output_dir() + name + ".s";
   if (system(cmd_line.c_str())) {
     std::cerr << "failed to execute clrxdisasm" << std::endl;
   }
@@ -272,7 +472,7 @@ void process_set_reg_mask(std::ostream &os, std::uint32_t reg, std::uint32_t val
                           std::map<std::uint32_t, std::uint32_t>& registers) {
   reg &= 0xFFFFFFU;
 
-  if (dump_draws) {
+  if (get_dump_draws()) {
     registers[reg] = (value & mask) | (registers[reg] & ~mask);
   }
 
@@ -303,7 +503,7 @@ void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value,
   reg &= 0xFFFFFFU;
   static std::uint32_t lo_value;
 
-  if (dump_draws) {
+  if (get_dump_draws()) {
     registers[reg] = value;
   }
 
@@ -357,12 +557,12 @@ void process_set_reg(std::ostream &os, std::uint32_t reg, std::uint32_t value,
 void dump_draw(const std::string& draw_description,
                const std::map<std::uint32_t, std::uint32_t>& registers)
 {
-  if (!dump_draws)
+  if (!get_dump_draws())
     return;
 
   static int draw_id = 0;
 
-  std::ofstream out(output_dir + "draw." + std::to_string(draw_id) + ".txt");
+  std::ofstream out(get_output_dir() + "draw." + std::to_string(draw_id) + ".txt");
 
   out << "draw \"" << draw_description << "\"\n";
 
@@ -572,13 +772,13 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     break;
   case PKT3_INDEX_TYPE:
     si_dump_reg(os, R_028A7C_VGT_DMA_INDEX_TYPE, packet[1], ~0);
-    if (dump_draws) {
+    if (get_dump_draws()) {
       registers[R_028A7C_VGT_DMA_INDEX_TYPE] = packet[1];
     }
     break;
   case PKT3_NUM_INSTANCES:
     si_dump_reg(os, R_030934_VGT_NUM_INSTANCES, packet[1], ~0);
-    if (dump_draws) {
+    if (get_dump_draws()) {
       registers[R_030934_VGT_NUM_INSTANCES] = packet[1];
     }
     break;
@@ -1007,7 +1207,7 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
     for (unsigned j = 0; j < ibs_request[i].number_of_ibs; ++j) {
       auto addr = ibs_request[i].ibs[j].ib_mc_address;
       auto size = ibs_request[i].ibs[j].size;
-      std::ofstream out0(output_dir + "cs." + std::to_string(cs_id) +
+      std::ofstream out0(get_output_dir() + "cs." + std::to_string(cs_id) +
                          ".type.txt");
       out0 << ibs_request[i].ip_type << "\n";
       uint32_t *data = (uint32_t *)get_ptr(addr, size * 4);
@@ -1022,7 +1222,7 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
         else if (ibs_request[i].ibs[j].flags == 3)
           cs_type = "ce_preamble";
 
-        std::ofstream out(output_dir + "cs." + std::to_string(cs_id) + "." +
+        std::ofstream out(get_output_dir() + "cs." + std::to_string(cs_id) + "." +
                           cs_type + ".txt");
         out << std::hex << addr << std::dec << "\n";
 
@@ -1035,10 +1235,7 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
     ++cs_id;
   }
 
-  return ((int (*)(amdgpu_context_handle, uint64_t, struct amdgpu_cs_request *,
-                   uint32_t))_dl_sym(libdrm_handle, "amdgpu_cs_submit",
-                                     (void *)amdgpu_cs_submit))(
-      context, flags, ibs_request, number_of_requests);
+  return get_vtable().fn_cs_submit(context, flags, ibs_request, number_of_requests);
 }
 
 int amdgpu_cs_submit_raw(amdgpu_device_handle device,
@@ -1057,7 +1254,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
     auto addr = chunk_data->ib_data.va_start;
     auto size = chunk_data->ib_data.ib_bytes / 4;
 
-    std::ofstream out0(output_dir + "cs." + std::to_string(cs_id) +
+    std::ofstream out0(get_output_dir() + "cs." + std::to_string(cs_id) +
                        ".type.txt");
     out0 << chunk_data->ib_data.ip_type << "\n";
     uint32_t *data = (uint32_t *)get_ptr(addr, size * 4);
@@ -1072,7 +1269,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
       else if (chunk_data->ib_data.flags == 3)
         cs_type = "ce_preamble";
 
-      std::ofstream out(output_dir + "cs." + std::to_string(cs_id) + "." +
+      std::ofstream out(get_output_dir() + "cs." + std::to_string(cs_id) + "." +
                         cs_type + ".txt");
       out << std::hex << addr << std::dec << "\n";
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
@@ -1082,10 +1279,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
     }
     ++cs_id;
   }
-  return ((int (*)(amdgpu_device_handle, amdgpu_context_handle, amdgpu_bo_list_handle, int, struct drm_amdgpu_cs_chunk *,
-                   uint64_t *))_dl_sym(libdrm_handle, "amdgpu_cs_submit_raw",
-                                     (void *)amdgpu_cs_submit_raw))(
-      device, context, resources, num_chunks, chunks, seq_no);
+  return get_vtable().fn_cs_submit_raw(device, context, resources, num_chunks, chunks, seq_no);
 }
 
 int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
@@ -1104,14 +1298,14 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
     auto addr = chunk_data->ib_data.va_start;
     auto size = chunk_data->ib_data.ib_bytes / 4;
 
-    std::ofstream out0(output_dir + "cs." + std::to_string(cs_id) +
+    std::ofstream out0(get_output_dir() + "cs." + std::to_string(cs_id) +
                        ".type.txt");
     out0 << chunk_data->ib_data.ip_type << "\n";
     uint32_t *data = (uint32_t *)get_ptr(addr, size * 4);
     if (data) {
       std::string cs_type = "unknown";
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
-	cs_type = "dma";
+        cs_type = "dma";
       else if (chunk_data->ib_data.flags == 0)
         cs_type = "de";
       else if (chunk_data->ib_data.flags == 1)
@@ -1119,20 +1313,17 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
       else if (chunk_data->ib_data.flags == 3)
         cs_type = "ce_preamble";
 
-      std::ofstream out(output_dir + "cs." + std::to_string(cs_id) + "." +
+      std::ofstream out(get_output_dir() + "cs." + std::to_string(cs_id) + "." +
                         cs_type + ".txt");
       out << std::hex << addr << std::dec << "\n";
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
         process_dma_ib(out, data, data + size);
       else
-	process_ib(out, data, data + size, registers);
+        process_ib(out, data, data + size, registers);
     }
     ++cs_id;
   }
-  return ((int (*)(amdgpu_device_handle, amdgpu_context_handle, uint32_t, int, struct drm_amdgpu_cs_chunk *,
-                   uint64_t *))_dl_sym(libdrm_handle, "amdgpu_cs_submit_raw2",
-                                     (void *)amdgpu_cs_submit_raw2))(
-      device, context, bo_list_handle, num_chunks, chunks, seq_no);
+  return get_vtable().fn_cs_submit_raw2(device, context, bo_list_handle, num_chunks, chunks, seq_no);
 }
 
 int amdgpu_bo_alloc(amdgpu_device_handle dev,
@@ -1140,10 +1331,7 @@ int amdgpu_bo_alloc(amdgpu_device_handle dev,
                     amdgpu_bo_handle *buf_handle) {
   std::lock_guard<std::mutex> lock(global_mutex);
 
-  auto ret = ((int (*)(amdgpu_device_handle, struct amdgpu_bo_alloc_request *,
-                       amdgpu_bo_handle *))_dl_sym(libdrm_handle, "amdgpu_bo_alloc",
-                                                   (void *)amdgpu_bo_alloc))(
-      dev, alloc_buffer, buf_handle);
+  auto ret = get_vtable().fn_bo_alloc(dev, alloc_buffer, buf_handle);
   if (ret) {
     return ret;
   }
@@ -1158,14 +1346,11 @@ int amdgpu_bo_free(amdgpu_bo_handle buf_handle) {
   auto it = buffers.find(buf_handle);
   if (it != buffers.end()) {
     if (it->second.data)
-      ((void (*)(amdgpu_bo_handle))_dl_sym(libdrm_handle, "amdgpu_bo_cpu_unmap",
-                                           (void *)amdgpu_bo_cpu_unmap))(
-          buf_handle);
+      get_vtable().fn_bo_cpu_unmap(buf_handle);
     buffers.erase(it);
   }
 
-  return ((int (*)(amdgpu_bo_handle))_dl_sym(libdrm_handle, "amdgpu_bo_free",
-                                      (void *)amdgpu_bo_free))(buf_handle);
+  return get_vtable().fn_bo_free(buf_handle);
 }
 
 int amdgpu_bo_cpu_map(amdgpu_bo_handle buf_handle, void **cpu) {
@@ -1176,9 +1361,7 @@ int amdgpu_bo_cpu_map(amdgpu_bo_handle buf_handle, void **cpu) {
     return 0;
   }
 
-  int ret = ((int (*)(amdgpu_bo_handle, void **))_dl_sym(
-      libdrm_handle, "amdgpu_bo_cpu_map", (void *)amdgpu_bo_cpu_map))(buf_handle,
-                                                                  cpu);
+  int ret = get_vtable().fn_bo_cpu_map(buf_handle, cpu);
   if (ret)
     return ret;
 
@@ -1189,9 +1372,7 @@ int amdgpu_bo_cpu_map(amdgpu_bo_handle buf_handle, void **cpu) {
 }
 
 int amdgpu_bo_cpu_unmap(amdgpu_bo_handle buf_handle) {
-  int ret = ((int (*)(amdgpu_bo_handle))_dl_sym(
-      libdrm_handle, "amdgpu_bo_cpu_unmap", (void *)amdgpu_bo_cpu_unmap))(
-      buf_handle);
+  int ret = get_vtable().fn_bo_cpu_unmap(buf_handle);
   if (ret)
     return ret;
 
@@ -1205,10 +1386,7 @@ int amdgpu_bo_cpu_unmap(amdgpu_bo_handle buf_handle) {
 
 int amdgpu_bo_va_op(amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
                     uint64_t addr, uint64_t flags, uint32_t ops) {
-  int ret = ((int (*)(amdgpu_bo_handle, uint64_t, uint64_t, uint64_t, uint64_t,
-                      uint32_t))_dl_sym(libdrm_handle, "amdgpu_bo_va_op",
-                                        (void *)amdgpu_bo_va_op))(
-      bo, offset, size, addr, flags, ops);
+  int ret = get_vtable().fn_bo_va_op(bo, offset, size, addr, flags, ops);
   if (ret)
     return ret;
 
@@ -1231,10 +1409,7 @@ int amdgpu_bo_va_op(amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
 
 int amdgpu_bo_va_op_raw(amdgpu_device_handle dev, amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
                     uint64_t addr, uint64_t flags, uint32_t ops) {
-  int ret = ((int (*)(amdgpu_device_handle, amdgpu_bo_handle, uint64_t, uint64_t, uint64_t, uint64_t,
-                      uint32_t))_dl_sym(libdrm_handle, "amdgpu_bo_va_op_raw",
-                                        (void *)amdgpu_bo_va_op_raw))(
-      dev, bo, offset, size, addr, flags, ops);
+  int ret = get_vtable().fn_bo_va_op_raw(dev, bo, offset, size, addr, flags, ops);
   if (ret)
     return ret;
 
@@ -1255,81 +1430,486 @@ int amdgpu_bo_va_op_raw(amdgpu_device_handle dev, amdgpu_bo_handle bo, uint64_t 
   return ret;
 }
 
-extern "C" int amdgpu_bo_va_op_refcounted(amdgpu_device_handle dev,
-amdgpu_bo_handle bo, uint64_t offset, uint64_t size,
-                    uint64_t addr, uint64_t flags, uint32_t ops) {
-  int ret = ((int (*)(amdgpu_device_handle, amdgpu_bo_handle, uint64_t, uint64_t, uint64_t, uint64_t,
-                      uint32_t))_dl_sym(libdrm_handle, "amdgpu_bo_va_op_refcounted",
-                                        (void *)amdgpu_bo_va_op))(
-      dev, bo, offset, size, addr, flags, ops);
-  if (ret)
-    return ret;
+/******************************************************************************
+ * Forwarding stubs
+ *****************************************************************************/
 
-  std::lock_guard<std::mutex> lock(global_mutex);
-  if (ops == AMDGPU_VA_OP_MAP) {
-    Map_info info;
-    info.bo = bo;
-    info.addr = addr;
-    info.size = size;
-    info.offset = offset;
-    maps[addr] = info;
-  } else if (ops == AMDGPU_VA_OP_UNMAP) {
-    auto it = maps.find(addr);
-    if (it != maps.end()) {
-      maps.erase(it);
-    }
-  }
-  return ret;
+int amdgpu_cs_ctx_create2(amdgpu_device_handle dev,
+                          uint32_t priority,
+                          amdgpu_context_handle *context)
+{
+  return get_vtable().fn_cs_ctx_create2(dev, priority, context);
 }
 
-extern "C" void *dlsym(void *handle, const char *name) {
-  if (!strcmp(name, "dlsym"))
-    return (void *)dlsym;
-  if (!strcmp(name, "amdgpu_cs_submit_raw2"))
-    return (void *)amdgpu_cs_submit_raw2;
-  if (!strcmp(name, "amdgpu_cs_submit_raw"))
-    return (void *)amdgpu_cs_submit_raw;
-  if (!strcmp(name, "amdgpu_cs_submit"))
-    return (void *)amdgpu_cs_submit;
-  if (!strcmp(name, "amdgpu_bo_alloc"))
-    return (void *)amdgpu_bo_alloc;
-  if (!strcmp(name, "amdgpu_bo_free"))
-    return (void *)amdgpu_bo_free;
-  if (!strcmp(name, "amdgpu_bo_cpu_map"))
-    return (void *)amdgpu_bo_cpu_map;
-  if (!strcmp(name, "amdgpu_bo_cpu_unmap"))
-    return (void *)amdgpu_bo_cpu_unmap;
-  if (!strcmp(name, "amdgpu_bo_va_op"))
-    return (void *)amdgpu_bo_va_op;
-  if (!strcmp(name, "amdgpu_bo_va_op_raw"))
-    return (void *)amdgpu_bo_va_op_raw;
-  if (!strcmp(name, "amdgpu_bo_va_op_refcounted"))
-    return (void *)amdgpu_bo_va_op_refcounted;
-  return get_real_dlsym()(handle, name);
+int amdgpu_cs_ctx_create(amdgpu_device_handle dev,
+                         amdgpu_context_handle *context)
+{
+  return get_vtable().fn_cs_ctx_create(dev, context);
 }
 
-extern "C" void *__libc_dlsym(void *, const char *);
-static void *(*get_real_dlsym())(void *, const char *) {
-  if (real_dlsym == NULL) {
-    std::cerr << "init dlsym\n";
-    libdrm_handle = dlopen("libdrm_amdgpu.so", RTLD_LAZY | RTLD_LOCAL);
-    std::cerr << "libdrm_amdgpu handle: " << libdrm_handle << "\n";
-    real_dlsym = (void *(*)(void *, const char *))_dl_sym(RTLD_NEXT, "dlsym",
-                                                          (void *)dlsym);
-    auto dir = getenv("INTERCEPT_DIR");
-    if (!dir || dir[0] == 0)
-      output_dir = "/tmp/";
-    else {
-      output_dir = dir;
-      if (output_dir.back() != '/')
-        output_dir += '/';
-    }
-    
-    auto dump_env = getenv("DUMP_DRAWS");
-    dump_draws = false;
-    if (dump_env)
-      dump_draws = atoi(dump_env);
+int amdgpu_cs_ctx_free(amdgpu_context_handle context)
+{
+  return get_vtable().fn_cs_ctx_free(context);
+}
+
+int amdgpu_cs_syncobj_import_sync_file(amdgpu_device_handle dev,
+                                       uint32_t syncobj,
+                                       int sync_file_fd)
+{
+  return get_vtable().fn_cs_syncobj_import_sync_file(dev, syncobj, sync_file_fd);
+}
+
+int amdgpu_cs_syncobj_import_sync_file2(amdgpu_device_handle dev,
+                                        uint32_t syncobj,
+                                        uint64_t point,
+                                        int sync_file_fd)
+{
+  return get_vtable().fn_cs_syncobj_import_sync_file2(dev, syncobj, point, sync_file_fd);
+}
+
+int amdgpu_cs_query_reset_state(amdgpu_context_handle context,
+                                uint32_t *state, uint32_t *hangs)
+
+{
+  return get_vtable().fn_cs_query_reset_state(context, state, hangs);
+}
+
+int amdgpu_va_range_alloc(amdgpu_device_handle dev,
+                          enum amdgpu_gpu_va_range va_range_type,
+                          uint64_t size,
+                          uint64_t va_base_alignment,
+                          uint64_t va_base_required,
+                          uint64_t *va_base_allocated,
+                          amdgpu_va_handle *va_range_handle,
+                          uint64_t flags)
+{
+  return get_vtable().fn_va_range_alloc(dev, va_range_type, size,
+                                        va_base_alignment, va_base_required,
+                                        va_base_allocated, va_range_handle,
+                                        flags);
+}
+
+int amdgpu_va_range_free(amdgpu_va_handle va_range_handle)
+{
+  return get_vtable().fn_va_range_free(va_range_handle);
+}
+
+int amdgpu_va_range_query(amdgpu_device_handle dev,
+                          enum amdgpu_gpu_va_range type,
+                          uint64_t *start,
+                          uint64_t *end)
+{
+  return get_vtable().fn_va_range_query(dev, type, start, end);
+}
+
+int amdgpu_cs_signal_semaphore(amdgpu_context_handle ctx,
+                               uint32_t ip_type,
+                               uint32_t ip_instance,
+                               uint32_t ring,
+                               amdgpu_semaphore_handle sem)
+{
+  return get_vtable().fn_cs_signal_semaphore(ctx, ip_type, ip_instance, ring, sem);
+}
+
+int amdgpu_device_initialize(int fd,
+                             uint32_t *major_version,
+                             uint32_t *minor_version,
+                             amdgpu_device_handle *device_handle)
+{
+  return get_vtable().fn_device_initialize(fd, major_version, minor_version, device_handle);
+}
+
+int amdgpu_device_deinitialize(amdgpu_device_handle device_handle)
+{
+  return get_vtable().fn_device_deinitialize(device_handle);
+}
+
+int amdgpu_bo_set_metadata(amdgpu_bo_handle buf_handle,
+                           struct amdgpu_bo_metadata *info)
+{
+  return get_vtable().fn_bo_set_metadata(buf_handle, info);
+}
+
+const char *amdgpu_get_marketing_name(amdgpu_device_handle dev)
+{
+  return get_vtable().fn_get_marketing_name(dev);
+}
+
+int amdgpu_query_info(amdgpu_device_handle dev, unsigned info_id,
+                      unsigned size, void *value)
+{
+  return get_vtable().fn_query_info(dev, info_id, size, value);
+}
+
+int amdgpu_query_hw_ip_count(amdgpu_device_handle dev, unsigned type,
+                             uint32_t *count)
+{
+  return get_vtable().fn_query_hw_ip_count(dev, type, count);
+}
+
+int amdgpu_query_sw_info(amdgpu_device_handle dev, enum amdgpu_sw_info info,
+                         void *value)
+{
+  return get_vtable().fn_query_sw_info(dev, info, value);
+}
+
+int amdgpu_query_hw_ip_info(amdgpu_device_handle dev, unsigned type,
+                            unsigned ip_instance,
+                            struct drm_amdgpu_info_hw_ip *info)
+{
+  return get_vtable().fn_query_hw_ip_info(dev, type, ip_instance, info);
+}
+
+int amdgpu_query_heap_info(amdgpu_device_handle dev, uint32_t heap,
+                           uint32_t flags, struct amdgpu_heap_info *info)
+{
+  return get_vtable().fn_query_heap_info(dev, heap, flags, info);
+}
+
+int amdgpu_query_gds_info(amdgpu_device_handle dev,
+                          struct amdgpu_gds_resource_info *gds_info)
+{
+  return get_vtable().fn_query_gds_info(dev, gds_info);
+}
+
+int amdgpu_query_gpu_info(amdgpu_device_handle dev,
+                          struct amdgpu_gpu_info *info)
+{
+  return get_vtable().fn_query_gpu_info(dev, info);
+}
+
+int amdgpu_query_buffer_size_alignment(amdgpu_device_handle dev,
+                                       struct amdgpu_buffer_size_alignments *info)
+{
+  return get_vtable().fn_query_buffer_size_alignment(dev, info);
+}
+
+int amdgpu_query_sensor_info(amdgpu_device_handle dev, unsigned sensor_type,
+                             unsigned size, void *value)
+{
+  return get_vtable().fn_query_sensor_info(dev, sensor_type, size, value);
+}
+
+int amdgpu_bo_query_info(amdgpu_bo_handle buf_handle,
+                         struct amdgpu_bo_info *info)
+{
+  return get_vtable().fn_bo_query_info(buf_handle, info);
+}
+
+int amdgpu_query_firmware_version(amdgpu_device_handle dev, unsigned fw_type,
+                                  unsigned ip_instance, unsigned index,
+                                  uint32_t *version, uint32_t *feature)
+{
+  return get_vtable().fn_query_firmware_version(dev, fw_type, ip_instance,
+                                                index, version, feature);
+}
+
+int amdgpu_query_crtc_from_id(amdgpu_device_handle dev, unsigned id,
+                              int32_t *result)
+{
+  return get_vtable().fn_query_crtc_from_id(dev, id, result);
+}
+
+int amdgpu_read_mm_registers(amdgpu_device_handle dev, unsigned dword_offset,
+                             unsigned count, uint32_t instance, uint32_t flags,
+                             uint32_t *values)
+{
+  return get_vtable().fn_read_mm_registers(dev, dword_offset, count, instance, flags, values);
+}
+
+int amdgpu_bo_list_create_raw(amdgpu_device_handle dev,
+                              uint32_t number_of_buffers,
+                              struct drm_amdgpu_bo_list_entry *buffers,
+                              uint32_t *result)
+{
+  return get_vtable().fn_bo_list_create_raw(dev, number_of_buffers, buffers, result);
+}
+
+int amdgpu_bo_list_destroy_raw(amdgpu_device_handle dev, uint32_t bo_list)
+{
+  return get_vtable().fn_bo_list_destroy_raw(dev, bo_list);
+}
+
+int amdgpu_bo_list_create(amdgpu_device_handle dev,
+                          uint32_t number_of_resources,
+                          amdgpu_bo_handle *resources,
+                          uint8_t *resource_prios,
+                          amdgpu_bo_list_handle *result)
+{
+  return get_vtable().fn_bo_list_create(dev, number_of_resources, resources, resource_prios, result);
+}
+
+int amdgpu_bo_list_destroy(amdgpu_bo_list_handle handle)
+{
+  return get_vtable().fn_bo_list_destroy(handle);
+}
+
+int amdgpu_bo_list_update(amdgpu_bo_list_handle handle,
+                          uint32_t number_of_resources,
+                          amdgpu_bo_handle *resources,
+                          uint8_t *resource_prios)
+{
+  return get_vtable().fn_bo_list_update(handle, number_of_resources, resources,
+                                        resource_prios);
+}
+
+int amdgpu_vm_reserve_vmid(amdgpu_device_handle dev, uint32_t flags)
+{
+  return get_vtable().fn_vm_reserve_vmid(dev, flags);
+}
+
+int amdgpu_vm_unreserve_vmid(amdgpu_device_handle dev, uint32_t flags)
+{
+  return get_vtable().fn_vm_unreserve_vmid(dev, flags);
+}
+
+int amdgpu_bo_import(amdgpu_device_handle dev,
+                     enum amdgpu_bo_handle_type type,
+                     uint32_t shared_handle,
+                     struct amdgpu_bo_import_result *output)
+{
+  return get_vtable().fn_bo_import(dev, type, shared_handle, output);
+}
+
+int amdgpu_bo_export(amdgpu_bo_handle buf_handle,
+                     enum amdgpu_bo_handle_type type,
+                     uint32_t *shared_handle)
+{
+  return get_vtable().fn_bo_export(buf_handle, type, shared_handle);
+}
+
+int amdgpu_create_bo_from_user_mem(amdgpu_device_handle dev,
+                                   void *cpu, uint64_t size,
+                                   amdgpu_bo_handle *buf_handle)
+{
+  return get_vtable().fn_create_bo_from_user_mem(dev, cpu, size, buf_handle);
+}
+
+void amdgpu_bo_inc_ref(amdgpu_bo_handle bo)
+{
+  return get_vtable().fn_bo_inc_ref(bo);
+}
+
+int amdgpu_find_bo_by_cpu_mapping(amdgpu_device_handle dev,
+                                  void *cpu,
+                                  uint64_t size,
+                                  amdgpu_bo_handle *buf_handle,
+                                  uint64_t *offset_in_bo)
+{
+  return get_vtable().fn_find_bo_by_cpu_mapping(dev, cpu, size, buf_handle,
+                                                offset_in_bo);
+}
+
+int amdgpu_cs_create_semaphore(amdgpu_semaphore_handle *sem)
+{
+  return get_vtable().fn_cs_create_semaphore(sem);
+}
+
+int amdgpu_cs_wait_semaphore(amdgpu_context_handle ctx,
+                             uint32_t ip_type,
+                             uint32_t ip_instance,
+                             uint32_t ring,
+                             amdgpu_semaphore_handle sem)
+{
+  return get_vtable().fn_cs_wait_semaphore(ctx, ip_type, ip_instance, ring, sem);
+}
+
+int amdgpu_cs_destroy_semaphore(amdgpu_semaphore_handle sem)
+{
+  return get_vtable().fn_cs_destroy_semaphore(sem);
+}
+
+
+void amdgpu_cs_chunk_fence_to_dep(struct amdgpu_cs_fence *fence,
+                                  struct drm_amdgpu_cs_chunk_dep *dep)
+{
+  return get_vtable().fn_cs_chunk_fence_to_dep(fence, dep);
+}
+
+void amdgpu_cs_chunk_fence_info_to_data(struct amdgpu_cs_fence_info *fence_info,
+                                        struct drm_amdgpu_cs_chunk_data *data)
+{
+  return get_vtable().fn_cs_chunk_fence_info_to_data(fence_info, data);
+}
+
+int amdgpu_bo_wait_for_idle(amdgpu_bo_handle buf_handle,
+                            uint64_t timeout_ns,
+                            bool *buffer_busy)
+{
+  return get_vtable().fn_bo_wait_for_idle(buf_handle, timeout_ns, buffer_busy);
+}
+
+int amdgpu_cs_wait_fences(struct amdgpu_cs_fence *fences,
+                          uint32_t fence_count,
+                          bool wait_all,
+                          uint64_t timeout_ns,
+                          uint32_t *status, uint32_t *first)
+{
+  return get_vtable().fn_cs_wait_fences(fences, fence_count, wait_all,
+                                        timeout_ns, status, first);
+}
+
+int amdgpu_cs_fence_to_handle(amdgpu_device_handle dev,
+                              struct amdgpu_cs_fence *fence,
+                              uint32_t what,
+                              uint32_t *out_handle)
+{
+  return get_vtable().fn_cs_fence_to_handle(dev, fence, what, out_handle);
+}
+
+int amdgpu_cs_query_fence_status(struct amdgpu_cs_fence *fence,
+                                 uint64_t timeout_ns,
+                                 uint64_t flags,
+                                 uint32_t *expired)
+{
+  return get_vtable().fn_cs_query_fence_status(fence, timeout_ns, flags,
+                                               expired);
+}
+
+int amdgpu_cs_query_reset_state2(amdgpu_context_handle context,
+                                 uint64_t *flags)
+{
+  return get_vtable().fn_cs_query_reset_state2(context, flags);
+}
+
+int amdgpu_cs_syncobj_export_sync_file(amdgpu_device_handle dev,
+                                       uint32_t syncobj,
+                                       int *sync_file_fd)
+{
+  return get_vtable().fn_cs_syncobj_export_sync_file(dev, syncobj,
+                                                     sync_file_fd);
+}
+
+int amdgpu_cs_syncobj_export_sync_file2(amdgpu_device_handle dev,
+                                        uint32_t syncobj,
+                                        uint64_t point,
+                                        uint32_t flags,
+                                        int *sync_file_fd)
+{
+  return get_vtable().fn_cs_syncobj_export_sync_file2(dev, syncobj, point,
+                                                      flags, sync_file_fd);
+}
+
+int amdgpu_cs_create_syncobj(amdgpu_device_handle dev,
+                             uint32_t *syncobj)
+{
+  return get_vtable().fn_cs_create_syncobj(dev, syncobj);
+}
+
+int amdgpu_cs_create_syncobj2(amdgpu_device_handle dev,
+                              uint32_t  flags,
+                              uint32_t *syncobj)
+{
+  return get_vtable().fn_cs_create_syncobj2(dev, flags, syncobj);
+}
+
+int amdgpu_cs_destroy_syncobj(amdgpu_device_handle dev,
+                              uint32_t syncobj)
+{
+  return get_vtable().fn_cs_destroy_syncobj(dev, syncobj);
+}
+
+int amdgpu_cs_ctx_override_priority(amdgpu_device_handle dev,
+                                    amdgpu_context_handle context,
+                                    int master_fd,
+                                    unsigned priority)
+{
+  return get_vtable().fn_cs_ctx_override_priority(dev, context, master_fd,
+                                                  priority);
+}
+
+int amdgpu_cs_syncobj_reset(amdgpu_device_handle dev,
+                            const uint32_t *syncobjs, uint32_t syncobj_count)
+{
+  return get_vtable().fn_cs_syncobj_reset(dev, syncobjs, syncobj_count);
+}
+
+int amdgpu_cs_syncobj_wait(amdgpu_device_handle dev,
+                           uint32_t *handles, unsigned num_handles,
+                           int64_t timeout_nsec, unsigned flags,
+                           uint32_t *first_signaled)
+{
+  return get_vtable().fn_cs_syncobj_wait(dev, handles, num_handles,
+                                         timeout_nsec, flags, first_signaled);
+}
+
+int amdgpu_cs_syncobj_query(amdgpu_device_handle dev,
+                            uint32_t *handles, uint64_t *points,
+                            unsigned num_handles)
+{
+  return get_vtable().fn_cs_syncobj_query(dev, handles, points, num_handles);
+}
+
+int amdgpu_cs_syncobj_query2(amdgpu_device_handle dev,
+                             uint32_t *handles, uint64_t *points,
+                             unsigned num_handles, uint32_t flags)
+{
+  return get_vtable().fn_cs_syncobj_query2(dev, handles, points, num_handles,
+                                           flags);
+}
+
+int amdgpu_cs_syncobj_transfer(amdgpu_device_handle dev,
+                               uint32_t dst_handle,
+                               uint64_t dst_point,
+                               uint32_t src_handle,
+                               uint64_t src_point,
+                               uint32_t flags)
+{
+  return get_vtable().fn_cs_syncobj_transfer(dev, dst_handle, dst_point,
+                                             src_handle, src_point, flags);
+}
+
+int amdgpu_cs_syncobj_timeline_wait(amdgpu_device_handle dev,
+                                    uint32_t *handles, uint64_t *points,
+                                    unsigned num_handles,
+                                    int64_t timeout_nsec, unsigned flags,
+                                    uint32_t *first_signaled)
+{
+  return get_vtable().fn_cs_syncobj_timeline_wait(dev, handles, points,
+                                                  num_handles, timeout_nsec,
+                                                  flags, first_signaled);
+}
+
+int amdgpu_cs_syncobj_timeline_signal(amdgpu_device_handle dev,
+                                      const uint32_t *syncobjs,
+                                      uint64_t *points,
+                                      uint32_t syncobj_count)
+{
+  return get_vtable().fn_cs_syncobj_timeline_signal(dev, syncobjs, points,
+                                                    syncobj_count);
+}
+
+int amdgpu_cs_syncobj_signal(amdgpu_device_handle dev,
+                             const uint32_t *syncobjs, uint32_t syncobj_count)
+{
+  return get_vtable().fn_cs_syncobj_signal(dev, syncobjs, syncobj_count);
+}
+
+int amdgpu_cs_import_syncobj(amdgpu_device_handle dev,
+                             int shared_fd,
+                             uint32_t *syncobj)
+{
+  return get_vtable().fn_cs_import_syncobj(dev, shared_fd, syncobj);
+}
+
+int amdgpu_cs_export_syncobj(amdgpu_device_handle dev,
+                             uint32_t syncobj,
+                             int *shared_fd)
+{
+  return get_vtable().fn_cs_export_syncobj(dev, syncobj, shared_fd);
+}
+
+extern "C" void *dlopen(const char *filename, int flags)
+{
+  static void *(*real_dlopen)(const char *, int);
+  if (!real_dlopen) {
+    real_dlopen = (void *(*)(const char *, int))dlsym(RTLD_NEXT, "dlopen");
+  }
+  if (strcmp(filename, "libdrm_amdgpu.so.1") == 0) {
+    Dl_info info;
+    dladdr((void*)&dlopen, &info);
+    return real_dlopen(info.dli_fname, flags);
   }
 
-  return real_dlsym;
+  return real_dlopen(filename, flags);
 }
