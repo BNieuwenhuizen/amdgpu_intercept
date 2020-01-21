@@ -758,16 +758,16 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     print_named_value(os, "SEQ_HI", packet[6], 32);
     break;
   case PKT3_DRAW_INDEX_AUTO:
-    si_dump_reg(os, R_030930_VGT_NUM_INDICES, packet[1], ~0);
-    si_dump_reg(os, R_0287F0_VGT_DRAW_INITIATOR, packet[2], ~0);
+    process_set_reg_mask(os, R_030930_VGT_NUM_INDICES, packet[1], ~0, registers);
+    process_set_reg_mask(os, R_0287F0_VGT_DRAW_INITIATOR, packet[2], ~0, registers);
     dump_draw("PKT3_DRAW_INDEX_AUTO", registers);
     break;
   case PKT3_DRAW_INDEX_2:
-    si_dump_reg(os, R_028A78_VGT_DMA_MAX_SIZE, packet[1], ~0);
-    si_dump_reg(os, R_0287E8_VGT_DMA_BASE, packet[2], ~0);
-    si_dump_reg(os, R_0287E4_VGT_DMA_BASE_HI, packet[3], ~0);
-    si_dump_reg(os, R_030930_VGT_NUM_INDICES, packet[4], ~0);
-    si_dump_reg(os, R_0287F0_VGT_DRAW_INITIATOR, packet[5], ~0);
+    process_set_reg_mask(os, R_028A78_VGT_DMA_MAX_SIZE, packet[1], ~0, registers);
+    process_set_reg_mask(os, R_0287E8_VGT_DMA_BASE, packet[2], ~0, registers);
+    process_set_reg_mask(os, R_0287E4_VGT_DMA_BASE_HI, packet[3], ~0, registers);
+    process_set_reg_mask(os, R_030930_VGT_NUM_INDICES, packet[4], ~0, registers);
+    process_set_reg_mask(os, R_0287F0_VGT_DRAW_INITIATOR, packet[5], ~0, registers);
     dump_draw("PKT3_DRAW_INDEX_2", registers);
     break;
   case PKT3_INDEX_TYPE:
