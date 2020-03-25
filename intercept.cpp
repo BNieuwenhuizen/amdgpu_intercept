@@ -17,7 +17,7 @@ extern "C" {
 #include <vector>
 
 enum radeon_class {
-		 GFX6, GFX7, GFX8, GFX9, GFX10
+                 GFX6, GFX7, GFX8, GFX9, GFX10
 };
 enum radeon_class chip_class = GFX10;
 
@@ -334,17 +334,17 @@ static void print_value(std::ostream &os, uint32_t value, int bits) {
 }
 
 static const struct si_reg *find_register(const struct si_reg *table,
-					  unsigned table_size,
-					  unsigned offset)
+                                          unsigned table_size,
+                                          unsigned offset)
 {
-	for (unsigned i = 0; i < table_size; i++) {
-		const struct si_reg *reg = &table[i];
+        for (unsigned i = 0; i < table_size; i++) {
+                const struct si_reg *reg = &table[i];
 
-		if (reg->offset == offset)
-			return reg;
-	}
+                if (reg->offset == offset)
+                        return reg;
+        }
 
-	return NULL;
+        return NULL;
 }
 
 static const struct si_reg *find_gfx_reg(enum radeon_class chip_class, unsigned offset)
@@ -488,7 +488,7 @@ std::int64_t get_shader_addr(std::uint32_t lo_value, std::uint32_t value)
 }
 
 void dump_shader_from_addr(std::ostream &os, std::map<std::vector<std::uint32_t>, std::string> &cache,
-		           const char *nm, std::uint32_t lo_value, std::uint32_t value)
+                           const char *nm, std::uint32_t lo_value, std::uint32_t value)
 {
   std::int64_t s_addr = get_shader_addr(lo_value, value);
   if (s_addr) {
@@ -641,15 +641,15 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     uint32_t *data = (uint32_t *)get_ptr(va, num_dwords << 2);
     if (data) {
       if (load_index) {
-	for (unsigned i = 0; i < num_dwords; i+=2) {
-	  unsigned reg = data[i] * 4 + SI_CONTEXT_REG_OFFSET;
-	  process_set_reg(os, reg, data[i + 1], registers);
-	}
+        for (unsigned i = 0; i < num_dwords; i+=2) {
+          unsigned reg = data[i] * 4 + SI_CONTEXT_REG_OFFSET;
+          process_set_reg(os, reg, data[i + 1], registers);
+        }
       } else {
-	for (unsigned i = 0; i < num_dwords; i++) {
-	  unsigned reg = base_reg + i * 4;
-	  process_set_reg(os, reg, data[i], registers);
-	}
+        for (unsigned i = 0; i < num_dwords; i++) {
+          unsigned reg = base_reg + i * 4;
+          process_set_reg(os, reg, data[i], registers);
+        }
       }
     } else if (!load_index)
       print_reg_name(os, base_reg);
@@ -666,15 +666,15 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     uint32_t *data = (uint32_t *)get_ptr(va, num_dwords << 2);
     if (data) {
       if (load_index) {
-	for (unsigned i = 0; i < num_dwords; i+=2) {
-	  unsigned reg = data[i] * 4 + SI_SH_REG_OFFSET;
-	  process_set_reg(os, reg, data[i + 1], registers);
-	}
+        for (unsigned i = 0; i < num_dwords; i+=2) {
+          unsigned reg = data[i] * 4 + SI_SH_REG_OFFSET;
+          process_set_reg(os, reg, data[i + 1], registers);
+        }
       } else {
-	for (unsigned i = 0; i < num_dwords; i++) {
-	  unsigned reg = base_reg + i * 4;
-	  process_set_reg(os, reg, data[i], registers);
-	}
+        for (unsigned i = 0; i < num_dwords; i++) {
+          unsigned reg = base_reg + i * 4;
+          process_set_reg(os, reg, data[i], registers);
+        }
       }
     } else if (!load_index)
       print_reg_name(os, base_reg);
@@ -975,9 +975,9 @@ static void process_si_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *
       print_named_value(os, "DST_ADDR_HI", curr[2], 32);
       pkt_count = size + 3;
       for (unsigned i = 0; i < size; i++) {
-	  print_spaces(os, INDENT_PKT);
-	  os << "0x" << std::setw(8) << std::setfill('0') << std::hex
-	     << curr[4 + i] << std::dec << "\n";
+          print_spaces(os, INDENT_PKT);
+          os << "0x" << std::setw(8) << std::setfill('0') << std::hex
+             << curr[4 + i] << std::dec << "\n";
       }
       curr += pkt_count;
       break;
@@ -986,57 +986,57 @@ static void process_si_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *
       switch (sub_op) {
       case 0x00:
       case 0x40:
-	os << "DMA COPY" << ((sub_op == 0x40) ? " BYTE" : "") << "\n";
-	print_named_value(os, "NUM_DWORDS", size, 32);
-	print_named_value(os, "DST_ADDR_LO", curr[1], 32);
-	print_named_value(os, "SRC_ADDR_LO", curr[2], 32);
-	print_named_value(os, "DST_ADDR_HI", curr[3], 32);
-	print_named_value(os, "SRC_ADDR_HI", curr[4], 32);
-	curr += 5;
-	break;
+        os << "DMA COPY" << ((sub_op == 0x40) ? " BYTE" : "") << "\n";
+        print_named_value(os, "NUM_DWORDS", size, 32);
+        print_named_value(os, "DST_ADDR_LO", curr[1], 32);
+        print_named_value(os, "SRC_ADDR_LO", curr[2], 32);
+        print_named_value(os, "DST_ADDR_HI", curr[3], 32);
+        print_named_value(os, "SRC_ADDR_HI", curr[4], 32);
+        curr += 5;
+        break;
       case 0x41:
-	os << "DMA COPY LINEAR 0x" << std::hex << curr[0] << std::dec << "\n";
-	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
-	print_named_value(os, "SRC_ADDR_HI_PITCH", curr[2], 32);
-	print_named_value(os, "SRC_SLICE_PITCH", curr[3], 32);
-	print_named_value(os, "DST_ADDR_LO", curr[4], 32);
-	print_named_value(os, "DST_ADDR_HI_PITCH", curr[5], 32);
-	print_named_value(os, "DST_SLICE_PITCH", curr[6], 32);
-	print_named_value(os, "XY", curr[7], 32);
-	print_named_value(os, "Z", curr[8], 32);
-	curr += 9;
-	break;
+        os << "DMA COPY LINEAR 0x" << std::hex << curr[0] << std::dec << "\n";
+        print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
+        print_named_value(os, "SRC_ADDR_HI_PITCH", curr[2], 32);
+        print_named_value(os, "SRC_SLICE_PITCH", curr[3], 32);
+        print_named_value(os, "DST_ADDR_LO", curr[4], 32);
+        print_named_value(os, "DST_ADDR_HI_PITCH", curr[5], 32);
+        print_named_value(os, "DST_SLICE_PITCH", curr[6], 32);
+        print_named_value(os, "XY", curr[7], 32);
+        print_named_value(os, "Z", curr[8], 32);
+        curr += 9;
+        break;
       case 0x49:
-	os << "DMA COPY L2T 0x" << std::hex << curr[0] << std::dec << "\n";
-	print_named_value(os, "TILE_ADDR_LO", curr[1], 32);
-	print_named_value(os, "TILE_INFO0", curr[2], 32);
-	print_named_value(os, "TILE_PITCH_TILE_MAX", curr[3], 32);
-	print_named_value(os, "TILE_INFO2", curr[4], 32);
-	print_named_value(os, "TILE_INFO3", curr[5], 32);
-	print_named_value(os, "TILE_INFO4", curr[6], 32);
-	print_named_value(os, "LIN_ADDR_LO", curr[7], 32);
-	print_named_value(os, "LIN_ADDR_HI_PITCH", curr[8], 32);
-	print_named_value(os, "LIN_SLICE_PITCH", curr[9], 32);
-	print_named_value(os, "XY", curr[10], 32);
-	print_named_value(os, "Z", curr[11], 32);
-	curr += 12;
-	break;
+        os << "DMA COPY L2T 0x" << std::hex << curr[0] << std::dec << "\n";
+        print_named_value(os, "TILE_ADDR_LO", curr[1], 32);
+        print_named_value(os, "TILE_INFO0", curr[2], 32);
+        print_named_value(os, "TILE_PITCH_TILE_MAX", curr[3], 32);
+        print_named_value(os, "TILE_INFO2", curr[4], 32);
+        print_named_value(os, "TILE_INFO3", curr[5], 32);
+        print_named_value(os, "TILE_INFO4", curr[6], 32);
+        print_named_value(os, "LIN_ADDR_LO", curr[7], 32);
+        print_named_value(os, "LIN_ADDR_HI_PITCH", curr[8], 32);
+        print_named_value(os, "LIN_SLICE_PITCH", curr[9], 32);
+        print_named_value(os, "XY", curr[10], 32);
+        print_named_value(os, "Z", curr[11], 32);
+        curr += 12;
+        break;
       case 0x4d:
-	os << "DMA COPY T2T 0x" << std::hex << curr[0] << std::dec << "\n";
-	print_named_value(os, "SRC_ADDR", curr[1], 32);
-	print_named_value(os, "SRC_INFO1", curr[2], 32);
-	print_named_value(os, "SRC_INFO2", curr[3], 32);
-	print_named_value(os, "DST_ADDR", curr[4], 32);
-	print_named_value(os, "DST_INFO1", curr[5], 32);
-	print_named_value(os, "DST_INFO2", curr[6], 32);
-	print_named_value(os, "INFO0", curr[7], 32);
-	print_named_value(os, "xINFO0", curr[8], 32);
-	print_named_value(os, "yINFO1", curr[9], 32);
-	print_named_value(os, "zINFO2", curr[10], 32);
-	print_named_value(os, "dINFO1", curr[11], 32);
-	print_named_value(os, "dzINFO13", curr[12], 32);
-	curr += 13;
-	break;
+        os << "DMA COPY T2T 0x" << std::hex << curr[0] << std::dec << "\n";
+        print_named_value(os, "SRC_ADDR", curr[1], 32);
+        print_named_value(os, "SRC_INFO1", curr[2], 32);
+        print_named_value(os, "SRC_INFO2", curr[3], 32);
+        print_named_value(os, "DST_ADDR", curr[4], 32);
+        print_named_value(os, "DST_INFO1", curr[5], 32);
+        print_named_value(os, "DST_INFO2", curr[6], 32);
+        print_named_value(os, "INFO0", curr[7], 32);
+        print_named_value(os, "xINFO0", curr[8], 32);
+        print_named_value(os, "yINFO1", curr[9], 32);
+        print_named_value(os, "zINFO2", curr[10], 32);
+        print_named_value(os, "dINFO1", curr[11], 32);
+        print_named_value(os, "dzINFO13", curr[12], 32);
+        curr += 13;
+        break;
       }
       break;
     }
@@ -1067,84 +1067,84 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       uint32_t sub_op = (val >> 8) & 0xff;
       switch (sub_op) {
       case CIK_SDMA_COPY_SUB_OPCODE_LINEAR:
-	pkt_count = 7;
-	os << "DMA COPY LINEAR" << "\n";
-	print_named_value(os, "SIZE", curr[1], 32);
-	print_named_value(os, "OFFSET", curr[2], 32);
-	print_named_value(os, "SRC_ADDR_LO", curr[3], 32);
-	print_named_value(os, "SRC_ADDR_HI", curr[4], 32);
-	print_named_value(os, "DST_ADDR_LO", curr[5], 32);
-	print_named_value(os, "DST_ADDR_HI", curr[6], 32);
-	break;
+        pkt_count = 7;
+        os << "DMA COPY LINEAR" << "\n";
+        print_named_value(os, "SIZE", curr[1], 32);
+        print_named_value(os, "OFFSET", curr[2], 32);
+        print_named_value(os, "SRC_ADDR_LO", curr[3], 32);
+        print_named_value(os, "SRC_ADDR_HI", curr[4], 32);
+        print_named_value(os, "DST_ADDR_LO", curr[5], 32);
+        print_named_value(os, "DST_ADDR_HI", curr[6], 32);
+        break;
       case CIK_SDMA_COPY_SUB_OPCODE_TILED:
-	pkt_count = 12;
-	os << "DMA COPY TILED" << "\n";
-	print_named_value(os, "TILED_ADDR_LO", curr[1], 32);
-	print_named_value(os, "TILED_ADDR_HI", curr[2], 32);
-	print_named_value(os, "DW_3", curr[3], 32);
-	print_named_value(os, "SLICE_PITCH", curr[4], 32);
-	print_named_value(os, "DW_5", curr[5], 32);
-	print_named_value(os, "DW_6", curr[6], 32);
-	print_named_value(os, "DW_7", curr[7], 32);
-	print_named_value(os, "LINEAR_ADDR_LO", curr[8], 32);
-	print_named_value(os, "LINEAR_ADDR_HI", curr[9], 32);
-	print_named_value(os, "LINEAR_PITCH", curr[10], 32);
-	print_named_value(os, "COUNT", curr[11], 32);	
-	break;
+        pkt_count = 12;
+        os << "DMA COPY TILED" << "\n";
+        print_named_value(os, "TILED_ADDR_LO", curr[1], 32);
+        print_named_value(os, "TILED_ADDR_HI", curr[2], 32);
+        print_named_value(os, "DW_3", curr[3], 32);
+        print_named_value(os, "SLICE_PITCH", curr[4], 32);
+        print_named_value(os, "DW_5", curr[5], 32);
+        print_named_value(os, "DW_6", curr[6], 32);
+        print_named_value(os, "DW_7", curr[7], 32);
+        print_named_value(os, "LINEAR_ADDR_LO", curr[8], 32);
+        print_named_value(os, "LINEAR_ADDR_HI", curr[9], 32);
+        print_named_value(os, "LINEAR_PITCH", curr[10], 32);
+        print_named_value(os, "COUNT", curr[11], 32);        
+        break;
       case CIK_SDMA_COPY_SUB_OPCODE_LINEAR_SUB_WINDOW:
-	pkt_count = 13;
-	os << "DMA COPY LINEAR SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
-	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
-	print_named_value(os, "SRC_ADDR_HI", curr[2], 32);
-	print_named_value(os, "SRC_XY", curr[3], 32);
-	print_named_value(os, "SRC_PITCH", curr[4], 32);
-	print_named_value(os, "SRC_SLICE_PITCH", curr[5], 32);
-	print_named_value(os, "DST_ADDR_LO", curr[6], 32);
-	print_named_value(os, "DST_ADDR_HI", curr[7], 32);
-	print_named_value(os, "DST_XY", curr[8], 32);
-	print_named_value(os, "DST_Z_PITCH", curr[9], 32);
-	print_named_value(os, "DST_SLICE_PITCH", curr[10], 32);
-	print_named_value(os, "W_H", curr[11], 32);
-	print_named_value(os, "DEPTH", curr[12], 32);
-	break;
+        pkt_count = 13;
+        os << "DMA COPY LINEAR SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
+        print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
+        print_named_value(os, "SRC_ADDR_HI", curr[2], 32);
+        print_named_value(os, "SRC_XY", curr[3], 32);
+        print_named_value(os, "SRC_PITCH", curr[4], 32);
+        print_named_value(os, "SRC_SLICE_PITCH", curr[5], 32);
+        print_named_value(os, "DST_ADDR_LO", curr[6], 32);
+        print_named_value(os, "DST_ADDR_HI", curr[7], 32);
+        print_named_value(os, "DST_XY", curr[8], 32);
+        print_named_value(os, "DST_Z_PITCH", curr[9], 32);
+        print_named_value(os, "DST_SLICE_PITCH", curr[10], 32);
+        print_named_value(os, "W_H", curr[11], 32);
+        print_named_value(os, "DEPTH", curr[12], 32);
+        break;
       case CIK_SDMA_COPY_SUB_OPCODE_TILED_SUB_WINDOW:
-	pkt_count = 14;
-	os << "DMA COPY TILED SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
-	print_named_value(os, "X_ADDR_LO", curr[1], 32);
-	print_named_value(os, "X_ADDR_HI", curr[2], 32);
-	print_named_value(os, "X_XY", curr[3], 32);
-	print_named_value(os, "X_PITCH", curr[4], 32);
-	print_named_value(os, "X_SRC_SLICE_PITCH", curr[5], 32);
-	print_named_value(os, "TILE_INFO", curr[6], 32);
-	print_named_value(os, "Y_ADDR_LO", curr[7], 32);
-	print_named_value(os, "Y_ADDR_HI", curr[8], 32);
-	print_named_value(os, "Y_XY", curr[9], 32);
-	print_named_value(os, "Y_Z_PITCH", curr[10], 32);
-	print_named_value(os, "Y_SLICE_PITCH", curr[11], 32);
-	print_named_value(os, "W_H", curr[12], 32);
-	print_named_value(os, "DEPTH", curr[13], 32);
-	break;
+        pkt_count = 14;
+        os << "DMA COPY TILED SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
+        print_named_value(os, "X_ADDR_LO", curr[1], 32);
+        print_named_value(os, "X_ADDR_HI", curr[2], 32);
+        print_named_value(os, "X_XY", curr[3], 32);
+        print_named_value(os, "X_PITCH", curr[4], 32);
+        print_named_value(os, "X_SRC_SLICE_PITCH", curr[5], 32);
+        print_named_value(os, "TILE_INFO", curr[6], 32);
+        print_named_value(os, "Y_ADDR_LO", curr[7], 32);
+        print_named_value(os, "Y_ADDR_HI", curr[8], 32);
+        print_named_value(os, "Y_XY", curr[9], 32);
+        print_named_value(os, "Y_Z_PITCH", curr[10], 32);
+        print_named_value(os, "Y_SLICE_PITCH", curr[11], 32);
+        print_named_value(os, "W_H", curr[12], 32);
+        print_named_value(os, "DEPTH", curr[13], 32);
+        break;
       case CIK_SDMA_COPY_SUB_OPCODE_T2T_SUB_WINDOW:
-	pkt_count = 15;
-	os << "DMA COPY T2T SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
-	print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
-	print_named_value(os, "SRC_ADDR_HI", curr[2], 32);
-	print_named_value(os, "SRC_XY", curr[3], 32);
-	print_named_value(os, "SRC_PITCH", curr[4], 32);
-	print_named_value(os, "SRC_SLICE_PITCH", curr[5], 32);
-	print_named_value(os, "SRC_TILE_INFO", curr[6], 32);
-	print_named_value(os, "DST_ADDR_LO", curr[7], 32);
-	print_named_value(os, "DST_ADDR_HI", curr[8], 32);
-	print_named_value(os, "DST_XY", curr[9], 32);
-	print_named_value(os, "DST_Z_PITCH", curr[10], 32);
-	print_named_value(os, "DST_SLICE_PITCH", curr[11], 32);
-	print_named_value(os, "DST_TILE_INFO", curr[12], 32);
-	print_named_value(os, "W_H", curr[13], 32);
-	print_named_value(os, "DEPTH", curr[14], 32);
-	break;
+        pkt_count = 15;
+        os << "DMA COPY T2T SUB WINDOW 0x" << std::hex << curr[0] << std::dec << "\n";
+        print_named_value(os, "SRC_ADDR_LO", curr[1], 32);
+        print_named_value(os, "SRC_ADDR_HI", curr[2], 32);
+        print_named_value(os, "SRC_XY", curr[3], 32);
+        print_named_value(os, "SRC_PITCH", curr[4], 32);
+        print_named_value(os, "SRC_SLICE_PITCH", curr[5], 32);
+        print_named_value(os, "SRC_TILE_INFO", curr[6], 32);
+        print_named_value(os, "DST_ADDR_LO", curr[7], 32);
+        print_named_value(os, "DST_ADDR_HI", curr[8], 32);
+        print_named_value(os, "DST_XY", curr[9], 32);
+        print_named_value(os, "DST_Z_PITCH", curr[10], 32);
+        print_named_value(os, "DST_SLICE_PITCH", curr[11], 32);
+        print_named_value(os, "DST_TILE_INFO", curr[12], 32);
+        print_named_value(os, "W_H", curr[13], 32);
+        print_named_value(os, "DEPTH", curr[14], 32);
+        break;
       default:
-	os << "DMA COPY UNKNOWN" << "\n";
-	break;
+        os << "DMA COPY UNKNOWN" << "\n";
+        break;
       }
       curr += pkt_count;
       break;
@@ -1153,24 +1153,24 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
       uint32_t sub_op = (val >> 8) & 0xff;
       switch (sub_op) {
       case SDMA_WRITE_SUB_OPCODE_LINEAR:
-	os << "DMA WRITE LINEAR" << "\n";
-	print_named_value(os, "DST_ADDR_LO", curr[1], 32);
-	print_named_value(os, "DST_ADDR_HI", curr[2], 32);
-	print_named_value(os, "NUM_DWORDS", curr[3], 32);
-	pkt_count = curr[3] + 4;
-	for (unsigned i = 0; i < curr[3]; i++) {
-	  print_spaces(os, INDENT_PKT);
-	  os << "0x" << std::setw(8) << std::setfill('0') << std::hex
-	     << curr[4 + i] << std::dec << "\n";
-	}
-	break;
+        os << "DMA WRITE LINEAR" << "\n";
+        print_named_value(os, "DST_ADDR_LO", curr[1], 32);
+        print_named_value(os, "DST_ADDR_HI", curr[2], 32);
+        print_named_value(os, "NUM_DWORDS", curr[3], 32);
+        pkt_count = curr[3] + 4;
+        for (unsigned i = 0; i < curr[3]; i++) {
+          print_spaces(os, INDENT_PKT);
+          os << "0x" << std::setw(8) << std::setfill('0') << std::hex
+             << curr[4 + i] << std::dec << "\n";
+        }
+        break;
       case SDMA_WRITE_SUB_OPCODE_TILED:
-	os << "DMA WRITE TILED" << "\n";
-	pkt_count = curr[8] + 10;
-	break;
+        os << "DMA WRITE TILED" << "\n";
+        pkt_count = curr[8] + 10;
+        break;
       default:
-	os << "DMA WRITE UNKNOWN" << "\n";
-	break;
+        os << "DMA WRITE UNKNOWN" << "\n";
+        break;
       }
       curr += pkt_count;
       break;
@@ -1214,7 +1214,7 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
       if (data) {
         std::string cs_type = "unknown";
         if (ibs_request[i].ip_type == AMDGPU_HW_IP_DMA)
-	  cs_type = "dma";
+          cs_type = "dma";
         else if (ibs_request[i].ibs[j].flags == 0)
           cs_type = "de";
         else if (ibs_request[i].ibs[j].flags == 1)
@@ -1226,10 +1226,10 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
                           cs_type + ".txt");
         out << std::hex << addr << std::dec << "\n";
 
-	if (ibs_request[i].ip_type == AMDGPU_HW_IP_DMA)
-	  process_si_dma_ib(out, data, data + size);
-	else
-	  process_ib(out, data, data + size, registers);
+        if (ibs_request[i].ip_type == AMDGPU_HW_IP_DMA)
+          process_si_dma_ib(out, data, data + size);
+        else
+          process_ib(out, data, data + size, registers);
       }
     }
     ++cs_id;
@@ -1239,11 +1239,11 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
 }
 
 int amdgpu_cs_submit_raw(amdgpu_device_handle device,
-			 amdgpu_context_handle context,
-			 amdgpu_bo_list_handle resources,
-			 int num_chunks,
-			 struct drm_amdgpu_cs_chunk *chunks,
-			 uint64_t *seq_no)
+                         amdgpu_context_handle context,
+                         amdgpu_bo_list_handle resources,
+                         int num_chunks,
+                         struct drm_amdgpu_cs_chunk *chunks,
+                         uint64_t *seq_no)
 {
   std::map<std::uint32_t, std::uint32_t> registers;
   for (unsigned i = 0; i < num_chunks; ++i) {
@@ -1261,7 +1261,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
     if (data) {
       std::string cs_type = "unknown";
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
-	cs_type = "dma";
+        cs_type = "dma";
       else if (chunk_data->ib_data.flags == 0)
         cs_type = "de";
       else if (chunk_data->ib_data.flags == 1)
@@ -1275,7 +1275,7 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
         process_si_dma_ib(out, data, data + size);
       else
-	process_ib(out, data, data + size, registers);
+        process_ib(out, data, data + size, registers);
     }
     ++cs_id;
   }
@@ -1283,11 +1283,11 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
 }
 
 int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
-			 amdgpu_context_handle context,
-			 uint32_t bo_list_handle,
-			 int num_chunks,
-			 struct drm_amdgpu_cs_chunk *chunks,
-			 uint64_t *seq_no)
+                         amdgpu_context_handle context,
+                         uint32_t bo_list_handle,
+                         int num_chunks,
+                         struct drm_amdgpu_cs_chunk *chunks,
+                         uint64_t *seq_no)
 {
   std::map<std::uint32_t, std::uint32_t> registers;
   for (unsigned i = 0; i < num_chunks; ++i) {
