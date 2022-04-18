@@ -245,6 +245,8 @@ const VTable& get_vtable() {
 
 struct Buffer_info {
   void *data = nullptr;
+  struct amdgpu_bo_alloc_request request;
+  
 };
 
 struct Map_info {
@@ -256,6 +258,7 @@ struct Map_info {
 
 static std::map<amdgpu_bo_handle, Buffer_info> buffers;
 static std::map<std::uint64_t, Map_info> maps;
+static std::map<amdgpu_bo_list_handle, std::vector<std::pair<amdgpu_bo_handle, int>>> bo_lists;
 
 void *get_ptr(uint64_t addr, uint64_t size) {
   std::unique_lock<std::mutex> lock(global_mutex);
@@ -1245,11 +1248,23 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
                          struct drm_amdgpu_cs_chunk *chunks,
                          uint64_t *seq_no)
 {
+  fprintf(stderr, "submit bo list: %p num chunks: %d\n", resources, num_chunks);
   std::map<std::uint32_t, std::uint32_t> registers;
   for (unsigned i = 0; i < num_chunks; ++i) {
     struct drm_amdgpu_cs_chunk_data *chunk_data;
-    if (chunks[i].chunk_id != AMDGPU_CHUNK_ID_IB)
-      continue;
+    switch(chunks[i].chunk_id) {
+    case AMDGPU_CHUNK_ID_IB: {
+      chunk_data = (struct drm_amdgpu_cs_chunk_data *)(uintptr_t)chunks[i].chunk_data;
+      std::uint64_t addr = chunk_data->ib_data.va_start;
+      std::uint64_t size = chunk_data->ib_data.ib_bytes / 4;
+      fprintf(stderr, "    IB: %lx %lx type: %s:%d:%d flags: %x\n", addr, size, chunk_data->ib_data.ip_type == 0 ? "gfx" : chunk_data->ib_data.ip_type == 1 ? "compute" : chunk_data->ib_data.ip_type == 2 ? "sdma" : "unknown", chunk_data->ib_data.ip_instance, chunk_data->ib_data.ring, chunk_data->ib_data.flags);
+      break;
+    }
+    default:
+      fprintf(stderr, "    chunk %d\n", chunks[i].chunk_id);
+      break;
+    }
+#if 0
     chunk_data = (struct drm_amdgpu_cs_chunk_data *)(uintptr_t)chunks[i].chunk_data;
     auto addr = chunk_data->ib_data.va_start;
     auto size = chunk_data->ib_data.ib_bytes / 4;
@@ -1278,6 +1293,92 @@ int amdgpu_cs_submit_raw(amdgpu_device_handle device,
         process_ib(out, data, data + size, registers);
     }
     ++cs_id;
+#endif
+  }
+  if (resources) {
+    fprintf(stderr, "  bo list: %p\n", resources);
+    std::unique_lock<std::mutex> lock(global_mutex);
+    auto it = bo_lists.find(resources);
+    if (it != bo_lists.end()) {
+      for (auto e : it->second) {
+        auto it2 = buffers.find(e.first);
+        if(it2 == buffers.end()) {
+          fprintf(stderr, "    bo: %p prio: %d\n", e.first, e.second);
+          continue;
+        }
+        fprintf(stderr, "     bo: %p (size: %ld, align: %ld, heaps: ", e.first, it2->second.request.alloc_size, it2->second.request.phys_alignment);
+        for (unsigned i = 1; i <= it2->second.request.preferred_heap; i <<= 1) {
+          if (!(i & it2->second.request.preferred_heap))
+            continue;
+          if ((i - 1) & it2->second.request.preferred_heap)
+            fprintf(stderr, "|");
+          switch(i) {
+            case 0x1:
+              fprintf(stderr, "cpu");
+              break;
+            case 0x2:
+              fprintf(stderr, "gtt");
+              break;
+            case 0x4:
+              fprintf(stderr, "vram");
+              break;
+            case 0x8:
+              fprintf(stderr, "gds");
+              break;
+            case 0x10:
+              fprintf(stderr, "gws");
+              break;
+            case 0x20:
+              fprintf(stderr, "oa");
+              break;
+          }
+        }
+        fprintf(stderr, ", flags: ");
+        for (uint64_t i = 1; i <= it2->second.request.flags; i <<= 1) {
+          if (!(i & it2->second.request.flags))
+            continue;
+          if ((i - 1) & it2->second.request.flags)
+            fprintf(stderr, "|");
+          switch(i) {
+            case 0x1:
+              fprintf(stderr, "cpu");
+              break;
+            case 0x2:
+              fprintf(stderr, "nocpu");
+              break;
+            case 0x4:
+              fprintf(stderr, "uswc");
+              break;
+            case 0x8:
+              fprintf(stderr, "clear");
+              break;
+            case 0x10:
+              fprintf(stderr, "shadow");
+              break;
+            case 0x20:
+              fprintf(stderr, "contig");
+              break;
+            case 0x40:
+              fprintf(stderr, "valid");
+              break;
+            case 0x80:
+              fprintf(stderr, "explicit");
+              break;
+            case 0x100:
+              fprintf(stderr, "mqd");
+              break;
+            case 0x200:
+              fprintf(stderr, "wipe");
+              break;
+            case 0x1000:
+              fprintf(stderr, "exported");
+              break;
+          }
+        }
+        fprintf(stderr, ") prio: %d\n", e.second);
+      }
+    }
+    
   }
   return get_vtable().fn_cs_submit_raw(device, context, resources, num_chunks, chunks, seq_no);
 }
@@ -1294,6 +1395,7 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
     struct drm_amdgpu_cs_chunk_data *chunk_data;
     if (chunks[i].chunk_id != AMDGPU_CHUNK_ID_IB)
       continue;
+#if 0
     chunk_data = (struct drm_amdgpu_cs_chunk_data *)(uintptr_t)chunks[i].chunk_data;
     auto addr = chunk_data->ib_data.va_start;
     auto size = chunk_data->ib_data.ib_bytes / 4;
@@ -1322,6 +1424,7 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
         process_ib(out, data, data + size, registers);
     }
     ++cs_id;
+#endif
   }
   return get_vtable().fn_cs_submit_raw2(device, context, bo_list_handle, num_chunks, chunks, seq_no);
 }
@@ -1336,7 +1439,9 @@ int amdgpu_bo_alloc(amdgpu_device_handle dev,
     return ret;
   }
 
-  buffers[*buf_handle];
+  Buffer_info info = {};
+  info.request = *alloc_buffer;
+  buffers[*buf_handle] = info;
   return ret;
 }
 
@@ -1636,11 +1741,33 @@ int amdgpu_bo_list_create(amdgpu_device_handle dev,
                           uint8_t *resource_prios,
                           amdgpu_bo_list_handle *result)
 {
-  return get_vtable().fn_bo_list_create(dev, number_of_resources, resources, resource_prios, result);
+  int ret = get_vtable().fn_bo_list_create(dev, number_of_resources, resources, resource_prios, result);
+  if (ret)
+    return ret;
+
+  fprintf(stderr, "bo list create %p with %u resources\n", *result, number_of_resources);
+
+  {
+    std::vector<std::pair<amdgpu_bo_handle, int>> handles;
+    for (uint32_t i = 0; i < number_of_resources; ++i) {
+      handles.push_back({resources[i], resource_prios ? resource_prios[i] : -1});
+    }
+
+    std::unique_lock<std::mutex> lock(global_mutex);
+    bo_lists[*result] = std::move(handles);
+  }
+  return ret;
 }
 
 int amdgpu_bo_list_destroy(amdgpu_bo_list_handle handle)
 {
+  {
+    std::unique_lock<std::mutex> lock(global_mutex);
+    auto it = bo_lists.find(handle);
+    if (it != bo_lists.end())
+      bo_lists.erase(it);
+  }
+  fprintf(stderr, "bo list destroy %p\n", handle);
   return get_vtable().fn_bo_list_destroy(handle);
 }
 
@@ -1675,6 +1802,14 @@ int amdgpu_bo_export(amdgpu_bo_handle buf_handle,
                      enum amdgpu_bo_handle_type type,
                      uint32_t *shared_handle)
 {
+  {
+    std::unique_lock<std::mutex> lock(global_mutex);
+    auto it = buffers.find(buf_handle);
+    switch(type) {
+    case amdgpu_bo_handle_type_dma_buf_fd:
+      it->second.request.flags |= 0x1000;
+    }
+  }
   return get_vtable().fn_bo_export(buf_handle, type, shared_handle);
 }
 
