@@ -441,8 +441,11 @@ static std::map<std::vector<std::uint32_t>, std::string> ls_shaders, hs_shaders,
 std::string
 dump_shader(std::map<std::vector<std::uint32_t>, std::string> &cache,
             std::string const &cat, std::uint64_t addr) {
+  if (addr == 0xffff800000000000ull)
+    return "unknown shader";
   uint32_t *data = (uint32_t *)get_ptr(addr, 0);
   if (!data) {
+    fprintf(stderr, "Failed to dump shader\n");
     return "unknown shader";
   }
 
@@ -1233,7 +1236,8 @@ int amdgpu_cs_submit(amdgpu_context_handle context, uint64_t flags,
           process_si_dma_ib(out, data, data + size);
         else
           process_ib(out, data, data + size, registers);
-      }
+      } else
+        fprintf(stderr, "failed to get IB data\n");
     }
     ++cs_id;
   }
@@ -1395,7 +1399,7 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
     struct drm_amdgpu_cs_chunk_data *chunk_data;
     if (chunks[i].chunk_id != AMDGPU_CHUNK_ID_IB)
       continue;
-#if 0
+#if 1
     chunk_data = (struct drm_amdgpu_cs_chunk_data *)(uintptr_t)chunks[i].chunk_data;
     auto addr = chunk_data->ib_data.va_start;
     auto size = chunk_data->ib_data.ib_bytes / 4;
@@ -1408,12 +1412,14 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
       std::string cs_type = "unknown";
       if (chunk_data->ib_data.ip_type == AMDGPU_HW_IP_DMA)
         cs_type = "dma";
-      else if (chunk_data->ib_data.flags == 0)
+      else if ((chunk_data->ib_data.flags & 3) == 0)
         cs_type = "de";
-      else if (chunk_data->ib_data.flags == 1)
+      else if ((chunk_data->ib_data.flags & 3) == 1)
         cs_type = "ce";
-      else if (chunk_data->ib_data.flags == 3)
+      else if ((chunk_data->ib_data.flags & 3) == 3)
         cs_type = "ce_preamble";
+      else
+        fprintf(stderr, "%d %x\n", chunk_data->ib_data.ip_type, chunk_data->ib_data.flags);
 
       std::ofstream out(get_output_dir() + "cs." + std::to_string(cs_id) + "." +
                         cs_type + ".txt");
@@ -1422,7 +1428,8 @@ int amdgpu_cs_submit_raw2(amdgpu_device_handle device,
         process_dma_ib(out, data, data + size);
       else
         process_ib(out, data, data + size, registers);
-    }
+    } else
+      fprintf(stderr, "Failed to get IB data\n");
     ++cs_id;
 #endif
   }
