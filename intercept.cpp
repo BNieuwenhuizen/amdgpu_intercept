@@ -17,9 +17,9 @@ extern "C" {
 #include <vector>
 
 enum radeon_class {
-                 GFX6, GFX7, GFX8, GFX9, GFX10
+                 GFX6, GFX7, GFX8, GFX9, GFX10, GFX11
 };
-enum radeon_class chip_class = GFX10;
+enum radeon_class chip_class = GFX11;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #include "sid.h"
@@ -354,7 +354,9 @@ static const struct si_reg *find_gfx_reg(enum radeon_class chip_class, unsigned 
 {
   const struct si_reg *reg = NULL;
 
-  if (chip_class == GFX10)
+  if (chip_class == GFX11)
+    reg = find_register(gfx11_reg_table, ARRAY_SIZE(gfx11_reg_table), offset);
+  else if (chip_class == GFX10)
     reg = find_register(gfx10_reg_table, ARRAY_SIZE(gfx10_reg_table), offset);
   else if (chip_class == GFX9)
     reg = find_register(gfx9_reg_table, ARRAY_SIZE(gfx9_reg_table), offset);
@@ -618,10 +620,6 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
                   op, predicate);*/
 
   switch (PKT3_IT_OPCODE_G(*packet)) {
-  case PKT3_SET_CONTEXT_REG_MASK: {
-    unsigned reg = packet[1] * 4 + SI_CONTEXT_REG_OFFSET;
-    process_set_reg_mask(os, reg, packet[3], packet[2], registers);
-  } break;
   case PKT3_SET_CONTEXT_REG: {
     unsigned reg = packet[1] * 4 + SI_CONTEXT_REG_OFFSET;
     for (unsigned i = 0; i < PKT_COUNT_G(packet[0]); ++i) {
@@ -714,11 +712,6 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     print_named_value(os, "LOAD_CONTROL", packet[1], 32);
     print_named_value(os, "SHADOW_CONTROL", packet[2], 32);
     break;
-  case PKT3_DRAW_PREAMBLE:
-    si_dump_reg(os, R_030908_VGT_PRIMITIVE_TYPE, packet[1], ~0);
-    si_dump_reg(os, R_028AA8_IA_MULTI_VGT_PARAM, packet[2], ~0);
-    si_dump_reg(os, R_028B58_VGT_LS_HS_CONFIG, packet[3], ~0);
-    break;
   case PKT3_ACQUIRE_MEM:
     si_dump_reg(os, R_0301F0_CP_COHER_CNTL, packet[1], ~0);
     si_dump_reg(os, R_0301F4_CP_COHER_SIZE, packet[2], ~0);
@@ -808,7 +801,7 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     si_dump_reg(os, R_411_CP_DMA_WORD1, packet[2], ~0);
     si_dump_reg(os, R_412_CP_DMA_WORD2, packet[3], ~0);
     si_dump_reg(os, R_413_CP_DMA_WORD3, packet[4], ~0);
-    si_dump_reg(os, R_414_COMMAND, packet[5], ~0);
+    si_dump_reg(os, R_415_COMMAND, packet[5], ~0);
     break;
   case PKT3_DMA_DATA:
     si_dump_reg(os, R_500_DMA_DATA_WORD0, packet[1], ~0);
@@ -816,7 +809,7 @@ void process_packet3(std::ostream &os, uint32_t *packet, std::map<std::uint32_t,
     si_dump_reg(os, R_502_SRC_ADDR_HI, packet[3], ~0);
     si_dump_reg(os, R_503_DST_ADDR_LO, packet[4], ~0);
     si_dump_reg(os, R_504_DST_ADDR_HI, packet[5], ~0);
-    si_dump_reg(os, R_414_COMMAND, packet[6], ~0);
+    si_dump_reg(os, R_415_COMMAND, packet[6], ~0);
     break;
   case PKT3_COPY_DATA:
     print_named_value(os, "SRC_SEL", (packet[1] >> 0) & 0xf, 4);
@@ -1169,10 +1162,6 @@ static void process_dma_ib(std::ostream &os, uint32_t *curr, uint32_t const *e) 
           os << "0x" << std::setw(8) << std::setfill('0') << std::hex
              << curr[4 + i] << std::dec << "\n";
         }
-        break;
-      case SDMA_WRITE_SUB_OPCODE_TILED:
-        os << "DMA WRITE TILED" << "\n";
-        pkt_count = curr[8] + 10;
         break;
       default:
         os << "DMA WRITE UNKNOWN" << "\n";
